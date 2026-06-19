@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<!-- 떨어지는 모래 — ASCII 픽셀 샌드박스 (단일 파일, 외부 의존성 없음) -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>떨어지는 모래</title>
+<style>
+  :root {
+    --bg:     #0a0b0e;
+    --screen: #05060a;
+    --line:   #1c2128;
+    --muted:  #6b7480;
+    --ink:    #cdd6e0;
+    --accent: #e7b24a;
+  }
+  * { box-sizing: border-box; }
+  .asb-device {
+    max-width: 760px; margin: 0 auto;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    color: var(--ink); -webkit-font-smoothing: antialiased;
+  }
+  .asb-readout {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 2px 4px 10px;
+  }
+  .asb-readout b { color: var(--accent); font-weight: 600; letter-spacing: .14em; }
+
+  .asb-screen {
+    position: relative; line-height: 0;
+    background: var(--screen);
+    border: 1px solid #11151c; border-radius: 6px; overflow: hidden;
+    cursor: crosshair; touch-action: none;
+  }
+  .asb-screen canvas { display: block; width: 100%; height: auto; image-rendering: auto; }
+  .asb-screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.20) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 120% at 50% 50%, transparent 64%, rgba(0,0,0,.5) 100%);
+    mix-blend-mode: multiply;
+  }
+
+  .asb-panel { margin-top: 12px; }
+  .asb-tools { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin-bottom: 14px; }
+  .asb-tools button {
+    background: transparent; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px 2px; font: inherit; font-size: 12px; letter-spacing: .02em;
+    cursor: pointer; transition: color .15s, border-color .15s, background .15s;
+  }
+  .asb-tools button:hover { color: var(--ink); }
+  .asb-tools button[aria-pressed="true"] {
+    color: #0a0b0e; font-weight: 600; border-color: transparent;
+  }
+  .asb-tools button[data-mat="sand"][aria-pressed="true"]  { background: #e7b24a; }
+  .asb-tools button[data-mat="water"][aria-pressed="true"] { background: #3aa6e0; color: #04121b; }
+  .asb-tools button[data-mat="wall"][aria-pressed="true"]  { background: #8a929b; }
+  .asb-tools button[data-mat="plant"][aria-pressed="true"] { background: #46c14e; color: #04140a; }
+  .asb-tools button[data-mat="fire"][aria-pressed="true"]  { background: #ff7a2c; color: #1b0a02; }
+  .asb-tools button[data-mat="erase"][aria-pressed="true"] { background: #cdd6e0; }
+
+  .asb-row { margin-bottom: 4px; }
+  .asb-row label {
+    display: flex; justify-content: space-between;
+    font-size: 11px; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px;
+  }
+  .asb-row label span { color: var(--accent); }
+  .asb-row input[type="range"] { width: 100%; accent-color: var(--accent); height: 18px; cursor: pointer; margin: 0; }
+
+  .asb-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .asb-actions button {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px 14px; font: inherit; font-size: 12px; letter-spacing: .06em; cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .asb-actions button:hover { border-color: var(--accent); color: var(--accent); }
+  .asb-actions button[aria-pressed="true"] { color: #0a0b0e; background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  .asb-hint { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin: 10px 4px 0; text-align: center; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="asb-device">
+  <div class="asb-readout">
+    <span>ASCII&nbsp;//&nbsp;<b id="asb-name">SAND</b></span>
+    <span id="asb-fps">--&nbsp;fps</span>
+  </div>
+
+  <div class="asb-screen" id="asb-screen">
+    <canvas id="asb-canvas"></canvas>
+  </div>
+
+  <div class="asb-panel">
+    <div class="asb-tools" role="group" aria-label="재료 선택">
+      <button data-mat="sand"  aria-pressed="true">모래</button>
+      <button data-mat="water" aria-pressed="false">물</button>
+      <button data-mat="wall"  aria-pressed="false">벽</button>
+      <button data-mat="plant" aria-pressed="false">식물</button>
+      <button data-mat="fire"  aria-pressed="false">불</button>
+      <button data-mat="erase" aria-pressed="false">지우개</button>
+    </div>
+
+    <div class="asb-row">
+      <label for="asb-brush">붓 크기 <span id="asb-brushv">3</span></label>
+      <input type="range" id="asb-brush" min="1" max="9" step="1" value="3">
+    </div>
+
+    <div class="asb-actions">
+      <button id="asb-play">일시정지</button>
+      <button id="asb-rain" aria-pressed="false">비 내리기</button>
+      <button id="asb-clear">전체 지우기</button>
+    </div>
+    <p class="asb-hint">재료를 고르고 화면을 칠하세요 · 불은 식물을 태우고, 식물은 물을 따라 자랍니다.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 재료 ----------
+  var EMPTY = 0, WALL = 1, SAND = 2, WATER = 3, PLANT = 4, FIRE = 5, SMOKE = 6;
+  var FIRE_LIFE = 80, SMOKE_LIFE = 46;
+
+  var COLS = 100, ROWS = 60;
+  var CW = 7, CH = 11;                  // 셀 픽셀 크기
+  var grid  = new Uint8Array(COLS * ROWS);
+  var ex    = new Uint8Array(COLS * ROWS);  // 변형(색)·수명 저장
+  var moved = new Uint8Array(COLS * ROWS);
+
+  // ---------- 글리프(문자+색) 아틀라스 ----------
+  var CHAR = { 1: "#", 2: "o", 3: "~", 4: "Y", 5: "*", 6: "°" };
+  var PAL = {
+    1: ["#5b6066", "#696e74", "#4d5258", "#787d83"],
+    2: ["#e7b24a", "#d99f33", "#f0c266", "#c9902c"],
+    3: ["#3aa6e0", "#2f8fd0", "#52b9ef", "#2779b8"],
+    4: ["#46c14e", "#37a83f", "#62d06a", "#2f8a39"],
+    5: ["#ff5a2c", "#ff8a1e", "#ffd23f", "#ff3b1f"],
+    6: ["#8a8f96", "#70757c", "#a2a7ad", "#5e6369"]
+  };
+  var VARIANTS = 4;
+  var atlas = document.createElement("canvas");
+  atlas.width = VARIANTS * CW; atlas.height = 6 * CH;
+  (function buildAtlas() {
+    var a = atlas.getContext("2d");
+    a.font = '700 ' + (CH - 1) + 'px ui-monospace, "SF Mono", Consolas, monospace';
+    a.textAlign = "center"; a.textBaseline = "middle";
+    for (var m = 1; m <= 6; m++) {
+      for (var vrt = 0; vrt < VARIANTS; vrt++) {
+        a.fillStyle = PAL[m][vrt];
+        a.fillText(CHAR[m], vrt * CW + CW / 2, m * CH - CH / 2 + 0.5);
+      }
+    }
+  })();
+
+  var canvas = document.getElementById("asb-canvas");
+  canvas.width = COLS * CW; canvas.height = ROWS * CH;
+  var ctx = canvas.getContext("2d");
+  var screen = document.getElementById("asb-screen");
+  var fpsEl  = document.getElementById("asb-fps");
+
+  // ---------- 셀 이동 헬퍼 ----------
+  function move(i, d) { grid[d] = grid[i]; ex[d] = ex[i]; grid[i] = EMPTY; ex[i] = 0; moved[d] = 1; }
+  function swap(i, d) {
+    var g = grid[d], e = ex[d];
+    grid[d] = grid[i]; ex[d] = ex[i]; grid[i] = g; ex[i] = e;
+    moved[d] = 1; moved[i] = 1;
+  }
+  function moveInto(i, d) { if (grid[d] === EMPTY) move(i, d); else swap(i, d); }
+  function sinkable(m) { return m === EMPTY || m === WATER; }
+
+  // ---------- 물리 업데이트 ----------
+  var frame = 0;
+  function update() {
+    moved.fill(0);
+    for (var y = ROWS - 1; y >= 0; y--) {
+      var ltr = (y + frame) & 1;
+      for (var s = 0; s < COLS; s++) {
+        var x = ltr ? s : COLS - 1 - s;
+        var i = x + y * COLS;
+        if (moved[i]) continue;
+        var m = grid[i];
+        if (m === SAND)       sand(x, y, i);
+        else if (m === WATER) water(x, y, i);
+        else if (m === PLANT) plant(x, y, i);
+        else if (m === FIRE)  fire(x, y, i);
+        else if (m === SMOKE) smoke(x, y, i);
+      }
+    }
+    frame++;
+  }
+
+  function sand(x, y, i) {
+    if (y >= ROWS - 1) return;
+    var d = i + COLS;
+    if (sinkable(grid[d])) { moveInto(i, d); return; }
+    var dl = x > 0 ? d - 1 : -1, dr = x < COLS - 1 ? d + 1 : -1;
+    var gl = dl >= 0 && sinkable(grid[dl]), gr = dr >= 0 && sinkable(grid[dr]);
+    if (gl && gr) moveInto(i, Math.random() < 0.5 ? dl : dr);
+    else if (gl) moveInto(i, dl);
+    else if (gr) moveInto(i, dr);
+  }
+
+  function water(x, y, i) {
+    if (y < ROWS - 1) {
+      var d = i + COLS;
+      if (grid[d] === EMPTY) { move(i, d); return; }
+      var dl = x > 0 ? d - 1 : -1, dr = x < COLS - 1 ? d + 1 : -1;
+      var gl = dl >= 0 && grid[dl] === EMPTY, gr = dr >= 0 && grid[dr] === EMPTY;
+      if (gl && gr) { move(i, Math.random() < 0.5 ? dl : dr); return; }
+      if (gl) { move(i, dl); return; }
+      if (gr) { move(i, dr); return; }
+    }
+    var l = x > 0 ? i - 1 : -1, r = x < COLS - 1 ? i + 1 : -1;
+    var hl = l >= 0 && grid[l] === EMPTY, hr = r >= 0 && grid[r] === EMPTY;
+    if (hl && hr) move(i, Math.random() < 0.5 ? l : r);
+    else if (hl) move(i, l);
+    else if (hr) move(i, r);
+  }
+
+  var N4 = [[0, -1], [0, 1], [-1, 0], [1, 0]];
+  function plant(x, y, i) {
+    if (Math.random() < 0.020) {
+      var dd = N4[(Math.random() * 4) | 0];
+      var nx = x + dd[0], ny = y + dd[1];
+      if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+        var ni = nx + ny * COLS;
+        if (grid[ni] === WATER) { grid[ni] = PLANT; ex[ni] = (Math.random() * VARIANTS) | 0; moved[ni] = 1; }
+      }
+    }
+  }
+
+  function fire(x, y, i) {
+    for (var k = 0; k < 4; k++) {
+      var nx = x + N4[k][0], ny = y + N4[k][1];
+      if (nx < 0 || nx >= COLS || ny < 0 || ny >= ROWS) continue;
+      var ni = nx + ny * COLS, g = grid[ni];
+      if (g === PLANT && Math.random() < 0.30) { grid[ni] = FIRE; ex[ni] = FIRE_LIFE; moved[ni] = 1; }
+      else if (g === WATER && Math.random() < 0.5) { grid[i] = SMOKE; ex[i] = SMOKE_LIFE; return; }
+    }
+    var lf = ex[i];
+    if (lf <= 1) {
+      if (Math.random() < 0.55) { grid[i] = SMOKE; ex[i] = SMOKE_LIFE; }
+      else { grid[i] = EMPTY; ex[i] = 0; }
+      return;
+    }
+    ex[i] = lf - 1;
+    if (Math.random() < 0.5 && y > 0) {
+      var up = i - COLS;
+      if (grid[up] === EMPTY) move(i, up);
+      else {
+        var ul = x > 0 ? up - 1 : -1, ur = x < COLS - 1 ? up + 1 : -1;
+        if (ul >= 0 && grid[ul] === EMPTY && Math.random() < 0.5) move(i, ul);
+        else if (ur >= 0 && grid[ur] === EMPTY) move(i, ur);
+      }
+    }
+  }
+
+  function smoke(x, y, i) {
+    var lf = ex[i];
+    if (lf <= 1) { grid[i] = EMPTY; ex[i] = 0; return; }
+    ex[i] = lf - 1;
+    if (y > 0) {
+      var up = i - COLS;
+      if (grid[up] === EMPTY) { move(i, up); return; }
+      var ul = x > 0 ? up - 1 : -1, ur = x < COLS - 1 ? up + 1 : -1;
+      var gl = ul >= 0 && grid[ul] === EMPTY, gr = ur >= 0 && grid[ur] === EMPTY;
+      if (gl && gr) { move(i, Math.random() < 0.5 ? ul : ur); return; }
+      if (gl) { move(i, ul); return; }
+      if (gr) { move(i, ur); return; }
+    }
+  }
+
+  // ---------- 렌더 ----------
+  function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (var y = 0; y < ROWS; y++) {
+      for (var x = 0; x < COLS; x++) {
+        var i = x + y * COLS, m = grid[i];
+        if (m === EMPTY) continue;
+        var vrt;
+        if (m === FIRE) vrt = ((frame >> 1) + x + y) & 3;
+        else if (m === SMOKE) {
+          vrt = (x * 7 + y * 3) & 3;
+          ctx.globalAlpha = 0.25 + 0.55 * (ex[i] / SMOKE_LIFE);
+        } else vrt = ex[i] & 3;
+        ctx.drawImage(atlas, vrt * CW, (m - 1) * CH, CW, CH, x * CW, y * CH, CW, CH);
+        if (m === SMOKE) ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // ---------- 붓질 ----------
+  var tool = SAND, brush = 3;
+  var TOOLNAME = { 2: "SAND", 3: "WATER", 1: "WALL", 4: "PLANT", 5: "FIRE", 0: "ERASE" };
+  function setCell(x, y, m) {
+    if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return;
+    var i = x + y * COLS;
+    grid[i] = m;
+    ex[i] = (m === FIRE) ? FIRE_LIFE : ((Math.random() * VARIANTS) | 0);
+  }
+  function paintAt(cx, cy) {
+    var r = brush, r2 = r * r;
+    for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++) {
+      if (dx * dx + dy * dy > r2) continue;
+      // 물·불은 듬성듬성 뿌려야 자연스럽다
+      if ((tool === WATER || tool === FIRE) && Math.random() < 0.45) continue;
+      setCell((cx + dx) | 0, (cy + dy) | 0, tool);
+    }
+  }
+
+  var pointer = { down: false };
+  function toCell(e) {
+    var rect = screen.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / rect.width * COLS) | 0,
+      y: ((e.clientY - rect.top) / rect.height * ROWS) | 0
+    };
+  }
+  screen.addEventListener("pointerdown", function (e) {
+    pointer.down = true; var c = toCell(e); paintAt(c.x, c.y);
+    screen.setPointerCapture(e.pointerId); e.preventDefault();
+  });
+  screen.addEventListener("pointermove", function (e) {
+    if (!pointer.down) return; var c = toCell(e); paintAt(c.x, c.y); e.preventDefault();
+  });
+  function up() { pointer.down = false; }
+  screen.addEventListener("pointerup", up);
+  screen.addEventListener("pointercancel", up);
+
+  // ---------- 제어 ----------
+  var MATKEY = { sand: SAND, water: WATER, wall: WALL, plant: PLANT, fire: FIRE, erase: EMPTY };
+  var nameEl = document.getElementById("asb-name");
+  var toolBtns = document.querySelectorAll(".asb-tools button");
+  toolBtns.forEach(function (b) {
+    b.addEventListener("click", function () {
+      tool = MATKEY[b.getAttribute("data-mat")];
+      toolBtns.forEach(function (o) { o.setAttribute("aria-pressed", o === b ? "true" : "false"); });
+      nameEl.textContent = TOOLNAME[tool];
+    });
+  });
+
+  var brushLab = document.getElementById("asb-brushv");
+  document.getElementById("asb-brush").addEventListener("input", function () {
+    brush = parseInt(this.value, 10); brushLab.textContent = this.value;
+  });
+
+  var playing = true;
+  var playBtn = document.getElementById("asb-play");
+  playBtn.addEventListener("click", function () {
+    playing = !playing; playBtn.textContent = playing ? "일시정지" : "재생";
+  });
+
+  var raining = false;
+  var rainBtn = document.getElementById("asb-rain");
+  rainBtn.addEventListener("click", function () {
+    raining = !raining; rainBtn.setAttribute("aria-pressed", raining ? "true" : "false");
+  });
+
+  document.getElementById("asb-clear").addEventListener("click", function () {
+    grid.fill(EMPTY); ex.fill(0);
+  });
+
+  // ---------- 초기 장면 ----------
+  function seedScene() {
+    var n, x, y;
+    for (n = 0; n < 950; n++) {
+      x = (COLS * 0.32 + (Math.random() - 0.5) * COLS * 0.42) | 0;
+      y = (Math.random() * ROWS * 0.34) | 0; setCell(x, y, SAND);
+    }
+    for (n = 0; n < 750; n++) {
+      x = (COLS * 0.6 + (Math.random() - 0.5) * COLS * 0.46) | 0;
+      y = (ROWS * 0.55 + Math.random() * ROWS * 0.18) | 0; setCell(x, y, WATER);
+    }
+    for (x = 4; x < COLS; x += 13) { setCell(x, ROWS - 1, PLANT); setCell(x, ROWS - 2, PLANT); }
+  }
+
+  // ---------- 루프 ----------
+  var last = performance.now(), frames = 0, fpsT = 0;
+  function loop(now) {
+    var dt = (now - last) / 1000; last = now;
+    if (playing) {
+      if (raining) for (var k = 0; k < 5; k++) setCell((Math.random() * COLS) | 0, 0, WATER);
+      update();
+    }
+    render();
+    frames++; fpsT += dt;
+    if (fpsT >= 0.5) { fpsEl.textContent = Math.round(frames / fpsT) + " fps"; frames = 0; fpsT = 0; }
+    requestAnimationFrame(loop);
+  }
+
+  // 모션 최소화 선호 시: 정지 상태로 시작(칠한 뒤 재생)
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    playing = false; playBtn.textContent = "재생";
+  } else {
+    seedScene();
+  }
+  render();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

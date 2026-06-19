@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<!-- ASCII 3D — 회전하는 도넛/정육면체/구 (단일 파일, 외부 의존성 없음) -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCII 3D</title>
+<style>
+  :root {
+    --bg:        #0c0a06;
+    --screen:    #070502;
+    --phosphor:  #ffb000;
+    --phosphor2: #ffcf6b;
+    --line:      #2a2114;
+    --muted:     #7a6438;
+    --ink:       #e7c98a;
+  }
+  * { box-sizing: border-box; }
+  .a3d-device {
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .a3d-readout {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 2px 4px 10px;
+  }
+  .a3d-readout b { color: var(--phosphor); font-weight: 600; letter-spacing: .14em; }
+
+  /* 화면(CRT 느낌) */
+  .a3d-screen {
+    position: relative;
+    background: radial-gradient(120% 120% at 50% 30%, #120c04 0%, var(--screen) 70%);
+    border: 1px solid #1c1609;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .a3d-art {
+    margin: 0; padding: 14px 6px;
+    white-space: pre; line-height: 1.0; text-align: center;
+    color: var(--phosphor);
+    text-shadow: 0 0 4px rgba(255,176,0,.55), 0 0 11px rgba(255,140,0,.28);
+    user-select: none;
+  }
+  /* 주사선 + 비네팅(시그니처) */
+  .a3d-screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 120% at 50% 50%, transparent 62%, rgba(0,0,0,.5) 100%);
+    mix-blend-mode: multiply;
+  }
+
+  /* 제어판 */
+  .a3d-panel { margin-top: 12px; }
+  .a3d-shapes { display: flex; gap: 6px; margin-bottom: 14px; }
+  .a3d-shapes button {
+    flex: 1; background: transparent; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px 4px; font: inherit; font-size: 12px; letter-spacing: .08em;
+    cursor: pointer; transition: color .15s, border-color .15s, background .15s;
+  }
+  .a3d-shapes button:hover { color: var(--ink); }
+  .a3d-shapes button[aria-pressed="true"] {
+    color: #1a1206; background: var(--phosphor); border-color: var(--phosphor); font-weight: 600;
+  }
+  .a3d-speedrow { margin-bottom: 4px; }
+  .a3d-row label {
+    display: flex; justify-content: space-between;
+    font-size: 11px; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px;
+  }
+  .a3d-row label span { color: var(--phosphor2); }
+  .a3d-row input[type="range"] {
+    width: 100%; accent-color: var(--phosphor); height: 18px; cursor: pointer; margin: 0;
+  }
+  .a3d-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .a3d-actions button {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px 14px; font: inherit; font-size: 12px; letter-spacing: .06em; cursor: pointer;
+  }
+  .a3d-actions button:hover { border-color: var(--phosphor); color: var(--phosphor); }
+
+  .a3d-colors { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .a3d-colors .lab { font-size: 11px; letter-spacing: .08em; color: var(--muted); margin-right: 2px; }
+  .a3d-swatch {
+    width: 22px; height: 22px; border-radius: 50%; padding: 0; border: 0;
+    cursor: pointer; box-shadow: 0 0 0 1px #00000066; outline-offset: 3px;
+  }
+  .a3d-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px currentColor; }
+  .a3d-custom {
+    width: 30px; height: 24px; padding: 0; background: transparent;
+    border: 1px solid var(--line); border-radius: 5px; cursor: pointer;
+  }
+  :focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="a3d-device">
+  <div class="a3d-readout">
+    <span>ASCII&nbsp;//&nbsp;<b id="a3d-name">DONUT</b></span>
+    <span id="a3d-fps">--&nbsp;fps</span>
+  </div>
+
+  <div class="a3d-screen" id="a3d-screen">
+    <pre class="a3d-art" id="a3d-art"></pre>
+  </div>
+
+  <div class="a3d-panel">
+    <div class="a3d-shapes" role="group" aria-label="도형 선택">
+      <button data-shape="torus"  aria-pressed="true">도넛</button>
+      <button data-shape="cube"   aria-pressed="false">정육면체</button>
+      <button data-shape="sphere" aria-pressed="false">구</button>
+    </div>
+
+    <div class="a3d-row a3d-speedrow">
+      <label for="a3d-spd">회전 속도 ×<span id="a3d-vs">1.0</span></label>
+      <input type="range" id="a3d-spd" min="0" max="3" step="0.05" value="1.0">
+    </div>
+
+    <div class="a3d-colors" role="group" aria-label="색상 선택">
+      <span class="lab">색상</span>
+      <button class="a3d-swatch" data-color="#ffb000" style="background:#ffb000;color:#ffb000" aria-pressed="true"  title="앰버"></button>
+      <button class="a3d-swatch" data-color="#3dff7a" style="background:#3dff7a;color:#3dff7a" aria-pressed="false" title="그린"></button>
+      <button class="a3d-swatch" data-color="#7fd8ff" style="background:#7fd8ff;color:#7fd8ff" aria-pressed="false" title="시안"></button>
+      <button class="a3d-swatch" data-color="#ff6fae" style="background:#ff6fae;color:#ff6fae" aria-pressed="false" title="핑크"></button>
+      <button class="a3d-swatch" data-color="#e9eeff" style="background:#e9eeff;color:#e9eeff" aria-pressed="false" title="화이트"></button>
+      <input type="color" class="a3d-custom" id="a3d-color" value="#ffb000" title="직접 선택" aria-label="색상 직접 선택">
+    </div>
+
+    <div class="a3d-actions">
+      <button id="a3d-play">일시정지</button>
+      <button id="a3d-reset">초기화</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 설정 ----------
+  var W = 80, H = 34, K2 = 8, K1 = 60, ASPECT = 0.58;
+  var RAMP = ".,-~:;=!*#$@";            // 어두움 -> 밝음
+  var LX = 0, LY = 1 / Math.SQRT2, LZ = -1 / Math.SQRT2; // 광원 방향
+
+  var art    = document.getElementById("a3d-art");
+  var screen = document.getElementById("a3d-screen");
+  var nameEl = document.getElementById("a3d-name");
+  var fpsEl  = document.getElementById("a3d-fps");
+
+  // ---------- 도형 표면 점(위치 3 + 법선 3 + 반사율 1) 생성: Float32Array 평탄 배열 ----------
+  function packTorus(R2, R1, du, dv) {
+    var arr = [];
+    for (var u = 0; u < 2 * Math.PI; u += du) {
+      var cu = Math.cos(u), su = Math.sin(u);
+      for (var v = 0; v < 2 * Math.PI; v += dv) {
+        var cv = Math.cos(v), sv = Math.sin(v);
+        var alb = 1.0; // 균일 반사율 → 순수 램버트 음영(가짜 줄무늬 제거로 회전이 자연스럽게 보임)
+        arr.push((R2 + R1 * cv) * cu, (R2 + R1 * cv) * su, R1 * sv, cv * cu, cv * su, sv, alb);
+      }
+    }
+    return new Float32Array(arr);
+  }
+  function packSphere(R, n) {
+    var arr = [];
+    for (var i = 0; i < n; i++) {
+      var pol = Math.PI * i / (n - 1), sv = Math.sin(pol), cv = Math.cos(pol);
+      var m = Math.max(6, Math.round(2 * n * sv));
+      for (var j = 0; j < m; j++) {
+        var az = 2 * Math.PI * j / m, cu = Math.cos(az), su = Math.sin(az);
+        var nx = sv * cu, ny = sv * su, nz = cv;
+        var alb = (0.60 + 0.40 * (0.5 + 0.5 * Math.sin(7 * az))) * (0.85 + 0.15 * (0.5 + 0.5 * Math.cos(6 * pol)));
+        arr.push(R * nx, R * ny, R * nz, nx, ny, nz, alb);
+      }
+    }
+    return new Float32Array(arr);
+  }
+  function packCube(half, n) {
+    var arr = [];
+    var faces = [
+      [[1,0,0],[0,1,0],[0,0,1]], [[-1,0,0],[0,1,0],[0,0,1]],
+      [[0,1,0],[1,0,0],[0,0,1]], [[0,-1,0],[1,0,0],[0,0,1]],
+      [[0,0,1],[1,0,0],[0,1,0]], [[0,0,-1],[1,0,0],[0,1,0]]
+    ];
+    for (var f = 0; f < faces.length; f++) {
+      var nrm = faces[f][0], a = faces[f][1], b = faces[f][2];
+      for (var i = 0; i < n; i++) {
+        var s = (i / (n - 1)) * 2 - 1;
+        for (var j = 0; j < n; j++) {
+          var t = (j / (n - 1)) * 2 - 1;
+          arr.push(
+            (nrm[0] + a[0]*s + b[0]*t) * half,
+            (nrm[1] + a[1]*s + b[1]*t) * half,
+            (nrm[2] + a[2]*s + b[2]*t) * half,
+            nrm[0], nrm[1], nrm[2], 1.0
+          );
+        }
+      }
+    }
+    return new Float32Array(arr);
+  }
+
+  var SHAPES = {
+    torus:  { data: packTorus(2, 1, 0.07, 0.02), label: "DONUT" },
+    cube:   { data: packCube(1.7, 44),           label: "CUBE"  },
+    sphere: { data: packSphere(2, 70),           label: "SPHERE"}
+  };
+
+  // ---------- 렌더 버퍼 ----------
+  var zb    = new Float32Array(W * H); // 깊이 버퍼
+  var lcur  = new Float32Array(W * H); // 이번 프레임 셀 밝기
+  var lprev = new Float32Array(W * H); // 이전 프레임 밝기(잔상으로 떨림 완화 + 인광 느낌)
+
+  function render(pts, ax, ay, az) {
+    var cx=Math.cos(ax), sx=Math.sin(ax);
+    var cy=Math.cos(ay), sy=Math.sin(ay);
+    var cz=Math.cos(az), sz=Math.sin(az);
+    var i, n = W * H;
+    for (i = 0; i < n; i++) { zb[i] = 0; lcur[i] = 0; }
+
+    for (i = 0; i < pts.length; i += 7) {
+      var x=pts[i], y=pts[i+1], z=pts[i+2], nx=pts[i+3], ny=pts[i+4], nz=pts[i+5], alb=pts[i+6];
+      // Rz
+      var x1=x*cz-y*sz, y1=x*sz+y*cz, z1=z;
+      var nX1=nx*cz-ny*sz, nY1=nx*sz+ny*cz, nZ1=nz;
+      // Ry
+      var x2=x1*cy+z1*sy, y2=y1, z2=-x1*sy+z1*cy;
+      var nX2=nX1*cy+nZ1*sy, nY2=nY1, nZ2=-nX1*sy+nZ1*cy;
+      // Rx
+      var y3=y2*cx-z2*sx, z3=y2*sx+z2*cx, x3=x2;
+      var nY3=nY2*cx-nZ2*sx, nZ3=nY2*sx+nZ2*cx, nX3=nX2;
+
+      var ooz = 1 / (z3 + K2);
+      var xp = Math.round(W/2 + K1*ooz*x3);          // 반올림: 칸 경계 튐 완화
+      var yp = Math.round(H/2 - K1*ooz*y3*ASPECT);
+      if (xp < 0 || xp >= W || yp < 0 || yp >= H) continue;
+
+      var L = (nX3*LX + nY3*LY + nZ3*LZ);
+      if (L <= 0) continue;
+      L *= alb;                                       // 표면 줄무늬(반사율)로 회전을 보이게
+      var idx = xp + yp * W;
+      if (ooz > zb[idx]) { zb[idx] = ooz; lcur[idx] = L; }
+    }
+
+    // 시간축 평활: 경계 깜빡임만 살짝 누르고 회전 움직임은 또렷하게 유지
+    var s = "";
+    for (i = 0; i < n; i++) {
+      var v = lcur[i] * 0.8 + lprev[i] * 0.2;
+      lprev[i] = v;
+      if (v > 0.04) {
+        var li = (v * RAMP.length) | 0;
+        if (li >= RAMP.length) li = RAMP.length - 1;
+        s += RAMP.charAt(li);
+      } else {
+        s += " ";
+      }
+      if ((i + 1) % W === 0) s += "\n";
+    }
+    return s;
+  }
+
+  // ---------- 상태 ----------
+  var state = {
+    shape: "torus",
+    sx: 0.60, sy: 0.26, sz: 0.00, // 축별 속도(rad/s) — X 주축 + Y 보조축(≈2.3:1, donut.c 비율)로 또렷한 텀블
+    speed: 1.0,                   // 전체 배율
+    ax: 0.6, ay: 0.0, az: 0.0,    // 누적 각도(초기 자세) — 롤 기울기 0으로 수직 대칭 텀블
+    playing: true
+  };
+
+  // 모션 최소화 선호 시 자동 회전 정지
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    state.playing = false;
+    document.getElementById("a3d-play").textContent = "재생";
+  }
+
+  // ---------- 반응형 글자 크기 + 셀 비율 측정 ----------
+  function fitFont() {
+    var avail = screen.clientWidth - 12;       // 좌우 패딩 보정
+    var fs = Math.max(4, Math.min(13, avail / (W * 0.62)));
+    art.style.fontSize = fs.toFixed(2) + "px";
+    measureAspect();
+  }
+  // 글꼴마다 문자 셀의 가로:세로가 달라 도형이 찌그러질 수 있으므로 실제로 잰다
+  function measureAspect() {
+    var probe = document.createElement("pre");
+    var cs = getComputedStyle(art);
+    probe.style.cssText = "position:absolute;visibility:hidden;left:-9999px;top:0;margin:0;padding:0;white-space:pre;";
+    probe.style.fontFamily = cs.fontFamily; probe.style.fontSize = cs.fontSize;
+    probe.style.fontWeight = cs.fontWeight; probe.style.lineHeight = cs.lineHeight;
+    probe.textContent = "MMMMMMMMMMMMMMMMMMMM"; // 20글자
+    document.body.appendChild(probe);
+    var rect = probe.getBoundingClientRect();
+    document.body.removeChild(probe);
+    var cw = rect.width / 20, ch = rect.height;
+    if (cw > 0 && ch > 0) ASPECT = Math.max(0.50, Math.min(0.62, cw / ch));
+  }
+  window.addEventListener("resize", fitFont);
+
+  // ---------- 루프 ----------
+  var last = performance.now(), acc = 0, frames = 0, fpsT = 0;
+  function loop(now) {
+    var dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+
+    if (state.playing) {
+      var k = state.speed;
+      state.ax += state.sx * k * dt;
+      state.ay += state.sy * k * dt;
+      state.az += state.sz * k * dt;
+    }
+    art.textContent = render(SHAPES[state.shape].data, state.ax, state.ay, state.az);
+
+    frames++; fpsT += dt;
+    if (fpsT >= 0.5) { fpsEl.textContent = Math.round(frames / fpsT) + " fps"; frames = 0; fpsT = 0; }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- 제어: 도형 ----------
+  var shapeBtns = document.querySelectorAll(".a3d-shapes button");
+  shapeBtns.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      state.shape = btn.getAttribute("data-shape");
+      shapeBtns.forEach(function (b) { b.setAttribute("aria-pressed", b === btn ? "true" : "false"); });
+      nameEl.textContent = SHAPES[state.shape].label;
+    });
+  });
+
+  // ---------- 제어: 속도 슬라이더 ----------
+  function bindSlider(id, valId, key, digits) {
+    var el = document.getElementById(id), lab = document.getElementById(valId);
+    el.addEventListener("input", function () {
+      var v = parseFloat(el.value);
+      state[key] = v;
+      lab.textContent = v.toFixed(digits);
+    });
+  }
+  bindSlider("a3d-spd", "a3d-vs", "speed", 1);
+
+  // ---------- 제어: 재생/초기화 ----------
+  var playBtn = document.getElementById("a3d-play");
+  playBtn.addEventListener("click", function () {
+    state.playing = !state.playing;
+    playBtn.textContent = state.playing ? "일시정지" : "재생";
+  });
+
+  document.getElementById("a3d-reset").addEventListener("click", function () {
+    state.speed = 1.0;
+    state.ax = 0.6; state.ay = 0.0; state.az = 0.0;
+    document.getElementById("a3d-spd").value = 1.0;
+    document.getElementById("a3d-vs").textContent = "1.0";
+  });
+
+  // ---------- 제어: 색상 ----------
+  var root = document.querySelector(".a3d-device");
+  function hexToRgb(h) {
+    h = h.replace("#", "");
+    if (h.length === 3) h = h.charAt(0)+h.charAt(0)+h.charAt(1)+h.charAt(1)+h.charAt(2)+h.charAt(2);
+    var n = parseInt(h, 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function setColor(hex) {
+    var c = hexToRgb(hex);
+    root.style.setProperty("--phosphor", hex);
+    root.style.setProperty("--phosphor2", hex);
+    art.style.color = hex;
+    art.style.textShadow =
+      "0 0 4px rgba("+c[0]+","+c[1]+","+c[2]+",.55), 0 0 11px rgba("+c[0]+","+c[1]+","+c[2]+",.28)";
+  }
+  var swatches = document.querySelectorAll(".a3d-swatch");
+  var colorInput = document.getElementById("a3d-color");
+  swatches.forEach(function (sw) {
+    sw.addEventListener("click", function () {
+      var hex = sw.getAttribute("data-color");
+      setColor(hex); colorInput.value = hex;
+      swatches.forEach(function (s) { s.setAttribute("aria-pressed", s === sw ? "true" : "false"); });
+    });
+  });
+  colorInput.addEventListener("input", function () {
+    setColor(colorInput.value);
+    swatches.forEach(function (s) { s.setAttribute("aria-pressed", "false"); });
+  });
+
+  // ---------- 시작 ----------
+  setColor("#ffb000");
+  fitFont();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

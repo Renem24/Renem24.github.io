@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<!-- ASCII 유체 — 마우스로 휘젓는 실시간 연기 (단일 파일, 외부 의존성 없음) -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ASCII 유체</title>
+<style>
+  :root {
+    --bg:        #060a0c;
+    --screen:    #03070a;
+    --phosphor:  #7fd8ff;
+    --phosphor2: #bfecff;
+    --line:      #14252c;
+    --muted:     #4f7686;
+    --ink:       #bfe0ec;
+  }
+  * { box-sizing: border-box; }
+  .afl-device {
+    max-width: 760px;
+    margin: 0 auto;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px;
+    font-family: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Mono", Consolas, "Liberation Mono", monospace;
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  .afl-readout {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--muted); margin: 2px 4px 10px;
+  }
+  .afl-readout b { color: var(--phosphor); font-weight: 600; letter-spacing: .14em; }
+
+  /* 화면(CRT 느낌) */
+  .afl-screen {
+    position: relative;
+    background: radial-gradient(120% 120% at 50% 30%, #051018 0%, var(--screen) 70%);
+    border: 1px solid #0c1a20;
+    border-radius: 6px;
+    overflow: hidden;
+    cursor: crosshair;
+    touch-action: none;
+  }
+  .afl-art {
+    margin: 0; padding: 12px 6px;
+    white-space: pre; line-height: 1.0; text-align: center;
+    color: var(--phosphor);
+    text-shadow: 0 0 4px rgba(127,216,255,.55), 0 0 11px rgba(80,180,255,.28);
+    user-select: none;
+  }
+  /* 주사선 + 비네팅(시그니처) */
+  .afl-screen::after {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px),
+      radial-gradient(120% 120% at 50% 50%, transparent 62%, rgba(0,0,0,.5) 100%);
+    mix-blend-mode: multiply;
+  }
+
+  /* 제어판 */
+  .afl-panel { margin-top: 12px; }
+  .afl-row { margin-bottom: 12px; }
+  .afl-row label {
+    display: flex; justify-content: space-between;
+    font-size: 11px; letter-spacing: .08em; color: var(--muted); margin-bottom: 3px;
+  }
+  .afl-row label span { color: var(--phosphor2); }
+  .afl-row input[type="range"] {
+    width: 100%; accent-color: var(--phosphor); height: 18px; cursor: pointer; margin: 0;
+  }
+
+  .afl-colors { display: flex; align-items: center; gap: 8px; margin-top: 4px; flex-wrap: wrap; }
+  .afl-colors .lab { font-size: 11px; letter-spacing: .08em; color: var(--muted); margin-right: 2px; }
+  .afl-swatch {
+    width: 22px; height: 22px; border-radius: 50%; padding: 0; border: 0;
+    cursor: pointer; box-shadow: 0 0 0 1px #00000066; outline-offset: 3px;
+  }
+  .afl-swatch[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px currentColor; }
+  .afl-custom {
+    width: 30px; height: 24px; padding: 0; background: transparent;
+    border: 1px solid var(--line); border-radius: 5px; cursor: pointer;
+  }
+
+  .afl-actions { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  .afl-actions button {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); border-radius: 5px;
+    padding: 8px 14px; font: inherit; font-size: 12px; letter-spacing: .06em; cursor: pointer;
+    transition: color .15s, border-color .15s, background .15s;
+  }
+  .afl-actions button:hover { border-color: var(--phosphor); color: var(--phosphor); }
+  .afl-actions button[aria-pressed="true"] {
+    color: #06141a; background: var(--phosphor); border-color: var(--phosphor); font-weight: 600;
+  }
+  .afl-hint { font-size: 11px; color: var(--muted); letter-spacing: .04em; margin: 10px 4px 0; text-align: center; }
+  :focus-visible { outline: 2px solid var(--phosphor); outline-offset: 2px; }
+</style>
+</head>
+<body>
+
+<div class="afl-device">
+  <div class="afl-readout">
+    <span>ASCII&nbsp;//&nbsp;<b>FLUID</b></span>
+    <span id="afl-fps">--&nbsp;fps</span>
+  </div>
+
+  <div class="afl-screen" id="afl-screen">
+    <pre class="afl-art" id="afl-art"></pre>
+  </div>
+
+  <div class="afl-panel">
+    <div class="afl-row">
+      <label for="afl-buoy">부력(연기 상승) ×<span id="afl-buoyv">1.0</span></label>
+      <input type="range" id="afl-buoy" min="0" max="2.5" step="0.05" value="1.0">
+    </div>
+    <div class="afl-row">
+      <label for="afl-swirl">소용돌이 ×<span id="afl-swirlv">3.0</span></label>
+      <input type="range" id="afl-swirl" min="0" max="9" step="0.1" value="3.0">
+    </div>
+
+    <div class="afl-colors" role="group" aria-label="색상 선택">
+      <span class="lab">색상</span>
+      <button class="afl-swatch" data-color="#7fd8ff" style="background:#7fd8ff;color:#7fd8ff" aria-pressed="true"  title="시안"></button>
+      <button class="afl-swatch" data-color="#ffb000" style="background:#ffb000;color:#ffb000" aria-pressed="false" title="앰버"></button>
+      <button class="afl-swatch" data-color="#3dff7a" style="background:#3dff7a;color:#3dff7a" aria-pressed="false" title="그린"></button>
+      <button class="afl-swatch" data-color="#ff6fae" style="background:#ff6fae;color:#ff6fae" aria-pressed="false" title="핑크"></button>
+      <button class="afl-swatch" data-color="#e9eeff" style="background:#e9eeff;color:#e9eeff" aria-pressed="false" title="화이트"></button>
+      <input type="color" class="afl-custom" id="afl-color" value="#7fd8ff" title="직접 선택" aria-label="색상 직접 선택">
+    </div>
+
+    <div class="afl-actions">
+      <button id="afl-play">일시정지</button>
+      <button id="afl-auto" aria-pressed="true">자동 연기</button>
+      <button id="afl-clear">지우기</button>
+    </div>
+    <p class="afl-hint">화면을 드래그하면 연기가 따라 흐릅니다.</p>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 격자(테두리 1칸 패딩) ----------
+  var W = 104, H = 48;                 // 내부 격자(=출력 문자 수)
+  var NW = W + 2, NH = H + 2, SZ = NW * NH;
+  function IX(i, j) { return i + NW * j; }
+
+  var u  = new Float32Array(SZ), v  = new Float32Array(SZ);
+  var u0 = new Float32Array(SZ), v0 = new Float32Array(SZ);
+  var dens = new Float32Array(SZ), dens0 = new Float32Array(SZ);
+  var p = new Float32Array(SZ), divg = new Float32Array(SZ), curl = new Float32Array(SZ);
+
+  var RAMP = ".,-~:;=!*#$@";           // 옅음 -> 짙음
+  var ITER = 16;                        // 압력 푸아송 반복
+  var SPEED = 1.0;
+  var DISS = 0.985;                     // 밀도 소멸(여운)
+
+  var art    = document.getElementById("afl-art");
+  var screen = document.getElementById("afl-screen");
+  var fpsEl  = document.getElementById("afl-fps");
+
+  // ---------- 경계: 열린 유출(이웃 복사) → 연기가 화면 밖으로 흘러나감 ----------
+  function bnd(x) {
+    for (var i = 1; i <= W; i++) { x[IX(i, 0)] = x[IX(i, 1)]; x[IX(i, H + 1)] = x[IX(i, H)]; }
+    for (var j = 1; j <= H; j++) { x[IX(0, j)] = x[IX(1, j)]; x[IX(W + 1, j)] = x[IX(W, j)]; }
+  }
+
+  function project() {
+    var i, j, k, id;
+    for (j = 1; j <= H; j++) for (i = 1; i <= W; i++) {
+      id = IX(i, j);
+      divg[id] = -0.5 * (u[id + 1] - u[id - 1] + v[id + NW] - v[id - NW]);
+      p[id] = 0;
+    }
+    bnd(divg); bnd(p);
+    for (k = 0; k < ITER; k++) {
+      for (j = 1; j <= H; j++) for (i = 1; i <= W; i++) {
+        id = IX(i, j);
+        p[id] = (divg[id] + p[id - 1] + p[id + 1] + p[id - NW] + p[id + NW]) * 0.25;
+      }
+      bnd(p);
+    }
+    for (j = 1; j <= H; j++) for (i = 1; i <= W; i++) {
+      id = IX(i, j);
+      u[id] -= 0.5 * (p[id + 1] - p[id - 1]);
+      v[id] -= 0.5 * (p[id + NW] - p[id - NW]);
+    }
+    bnd(u); bnd(v);
+  }
+
+  // 반-라그랑주 이류: 속도장(uu,vv)을 따라 d0 -> d
+  function advect(d, d0, uu, vv, dt) {
+    var i, j, i0, i1, j0, j1, x, y, s0, s1, t0, t1, id;
+    var dt0 = dt * SPEED;
+    for (j = 1; j <= H; j++) for (i = 1; i <= W; i++) {
+      id = IX(i, j);
+      x = i - dt0 * uu[id];
+      y = j - dt0 * vv[id];
+      if (x < 0.5) x = 0.5; else if (x > W + 0.5) x = W + 0.5;
+      if (y < 0.5) y = 0.5; else if (y > H + 0.5) y = H + 0.5;
+      i0 = x | 0; i1 = i0 + 1; j0 = y | 0; j1 = j0 + 1;
+      s1 = x - i0; s0 = 1 - s1; t1 = y - j0; t0 = 1 - t1;
+      d[id] = s0 * (t0 * d0[IX(i0, j0)] + t1 * d0[IX(i0, j1)])
+            + s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]);
+    }
+  }
+
+  // 와도 보존(소용돌이 강화)
+  function vorticity(dt) {
+    if (cfg.swirl <= 0) return;
+    var i, j, id;
+    for (j = 1; j <= H; j++) for (i = 1; i <= W; i++) {
+      id = IX(i, j);
+      curl[id] = 0.5 * (v[id + 1] - v[id - 1] - (u[id + NW] - u[id - NW]));
+    }
+    for (j = 2; j < H; j++) for (i = 2; i < W; i++) {
+      id = IX(i, j);
+      var dx = 0.5 * (Math.abs(curl[id + 1])  - Math.abs(curl[id - 1]));
+      var dy = 0.5 * (Math.abs(curl[id + NW]) - Math.abs(curl[id - NW]));
+      var len = Math.sqrt(dx * dx + dy * dy) + 1e-5;
+      dx /= len; dy /= len;
+      var c = curl[id];
+      u[id] += cfg.swirl * dt * dy * c;
+      v[id] -= cfg.swirl * dt * dx * c;
+    }
+  }
+
+  // ---------- 입력(부력 + 마우스 + 자동 분출) ----------
+  var cfg = { buoy: 1.0, swirl: 3.0, auto: true, playing: true };
+  var pointer = { down: false, gi: 0, gj: 0, lgi: 0, lgj: 0 };
+
+  function addForces(dt, t) {
+    var i, j, id;
+    // 부력: 짙은 연기일수록 위로(─v 방향), 그리고 가벼운 공기 저항
+    for (j = 1; j <= H; j++) for (i = 1; i <= W; i++) {
+      id = IX(i, j);
+      v[id] -= cfg.buoy * dens[id] * dt * 26;
+      u[id] *= 0.999; v[id] *= 0.999;
+    }
+    // 마우스로 휘젓기
+    if (pointer.down) {
+      var dvx = (pointer.gi - pointer.lgi), dvy = (pointer.gj - pointer.lgj);
+      stamp(pointer.gi, pointer.gj, 3.0, dvx * 6, dvy * 6, 1.0);
+      pointer.lgi = pointer.gi; pointer.lgj = pointer.gj;
+    }
+    // 자동 분출(흔들리는 연기 기둥)
+    if (cfg.auto) {
+      var ci = W * 0.5 + Math.sin(t * 0.0011) * 7 + Math.sin(t * 0.0027) * 3;
+      stamp(ci, H - 3, 2.4, Math.sin(t * 0.002) * 5, -10, 0.9);
+    }
+    clampVel();
+  }
+
+  // 붓 자국: 반경 r 안에 속도·밀도 주입
+  function stamp(ci, cj, r, vx, vy, amt) {
+    var i0 = Math.max(1, Math.floor(ci - r)), i1 = Math.min(W, Math.ceil(ci + r));
+    var j0 = Math.max(1, Math.floor(cj - r)), j1 = Math.min(H, Math.ceil(cj + r));
+    var r2 = r * r;
+    for (var j = j0; j <= j1; j++) for (var i = i0; i <= i1; i++) {
+      var dx = i - ci, dy = j - cj, q = dx * dx + dy * dy;
+      if (q > r2) continue;
+      var f = 1 - q / r2, id = IX(i, j);
+      u[id] += vx * f; v[id] += vy * f;
+      dens[id] += amt * f;
+      if (dens[id] > 2.6) dens[id] = 2.6;
+    }
+  }
+
+  function clampVel() {
+    for (var k = 0; k < SZ; k++) {
+      if (u[k] > 90) u[k] = 90; else if (u[k] < -90) u[k] = -90;
+      if (v[k] > 90) v[k] = 90; else if (v[k] < -90) v[k] = -90;
+    }
+  }
+
+  function step(dt, t) {
+    addForces(dt, t);
+    vorticity(dt);
+    project();
+    u0.set(u); v0.set(v);
+    advect(u, u0, u0, v0, dt); advect(v, v0, u0, v0, dt); bnd(u); bnd(v);
+    project();
+    dens0.set(dens);
+    advect(dens, dens0, u, v, dt);
+    for (var k = 0; k < SZ; k++) dens[k] *= DISS;
+    bnd(dens);
+  }
+
+  // ---------- 렌더 ----------
+  function render() {
+    var s = "", n = RAMP.length;
+    for (var j = 1; j <= H; j++) {
+      for (var i = 1; i <= W; i++) {
+        var d = dens[IX(i, j)] * 0.62;       // 표시 스케일
+        if (d > 0.04) {
+          var li = (d * n) | 0; if (li >= n) li = n - 1;
+          s += RAMP.charAt(li);
+        } else s += " ";
+      }
+      s += "\n";
+    }
+    art.textContent = s;
+  }
+
+  // ---------- 포인터 → 격자 ----------
+  function toGrid(e) {
+    var r = screen.getBoundingClientRect();
+    pointer.gi = ((e.clientX - r.left) / r.width) * W;
+    pointer.gj = ((e.clientY - r.top) / r.height) * H;
+  }
+  screen.addEventListener("pointerdown", function (e) {
+    pointer.down = true; toGrid(e);
+    pointer.lgi = pointer.gi; pointer.lgj = pointer.gj;
+    screen.setPointerCapture(e.pointerId); e.preventDefault();
+    if (!cfg.playing) { cfg.playing = true; playBtn.textContent = "일시정지"; }
+  });
+  screen.addEventListener("pointermove", function (e) { if (pointer.down) { toGrid(e); e.preventDefault(); } });
+  function endPointer() { pointer.down = false; }
+  screen.addEventListener("pointerup", endPointer);
+  screen.addEventListener("pointercancel", endPointer);
+  screen.addEventListener("pointerleave", endPointer);
+
+  // ---------- 반응형 글자 크기 ----------
+  function fitFont() {
+    var avail = screen.clientWidth - 12;
+    var fs = Math.max(4, Math.min(12, avail / (W * 0.62)));
+    art.style.fontSize = fs.toFixed(2) + "px";
+  }
+  window.addEventListener("resize", fitFont);
+
+  // ---------- 루프 ----------
+  var last = performance.now(), frames = 0, fpsT = 0;
+  function loop(now) {
+    var dt = Math.min(0.033, (now - last) / 1000); last = now;
+    if (cfg.playing) step(dt, now);
+    render();
+    frames++; fpsT += dt;
+    if (fpsT >= 0.5) { fpsEl.textContent = Math.round(frames / fpsT) + " fps"; frames = 0; fpsT = 0; }
+    requestAnimationFrame(loop);
+  }
+
+  // ---------- 제어 바인딩 ----------
+  function bindSlider(id, valId, key, digits) {
+    var el = document.getElementById(id), lab = document.getElementById(valId);
+    el.addEventListener("input", function () {
+      var x = parseFloat(el.value); cfg[key] = x; lab.textContent = x.toFixed(digits);
+    });
+  }
+  bindSlider("afl-buoy", "afl-buoyv", "buoy", 1);
+  bindSlider("afl-swirl", "afl-swirlv", "swirl", 1);
+
+  var playBtn = document.getElementById("afl-play");
+  playBtn.addEventListener("click", function () {
+    cfg.playing = !cfg.playing; playBtn.textContent = cfg.playing ? "일시정지" : "재생";
+  });
+  var autoBtn = document.getElementById("afl-auto");
+  autoBtn.addEventListener("click", function () {
+    cfg.auto = !cfg.auto; autoBtn.setAttribute("aria-pressed", cfg.auto ? "true" : "false");
+  });
+  document.getElementById("afl-clear").addEventListener("click", function () {
+    u.fill(0); v.fill(0); dens.fill(0); p.fill(0);
+  });
+
+  // ---------- 색상 ----------
+  var root = document.querySelector(".afl-device");
+  function hexToRgb(h) {
+    h = h.replace("#", "");
+    if (h.length === 3) h = h.charAt(0)+h.charAt(0)+h.charAt(1)+h.charAt(1)+h.charAt(2)+h.charAt(2);
+    var n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  }
+  function setColor(hex) {
+    var c = hexToRgb(hex);
+    root.style.setProperty("--phosphor", hex);
+    root.style.setProperty("--phosphor2", hex);
+    art.style.color = hex;
+    art.style.textShadow =
+      "0 0 4px rgba("+c[0]+","+c[1]+","+c[2]+",.55), 0 0 11px rgba("+c[0]+","+c[1]+","+c[2]+",.28)";
+  }
+  var swatches = document.querySelectorAll(".afl-swatch");
+  var colorInput = document.getElementById("afl-color");
+  swatches.forEach(function (sw) {
+    sw.addEventListener("click", function () {
+      var hex = sw.getAttribute("data-color");
+      setColor(hex); colorInput.value = hex;
+      swatches.forEach(function (s) { s.setAttribute("aria-pressed", s === sw ? "true" : "false"); });
+    });
+  });
+  colorInput.addEventListener("input", function () {
+    setColor(colorInput.value);
+    swatches.forEach(function (s) { s.setAttribute("aria-pressed", "false"); });
+  });
+
+  // ---------- 초기 연기 시드 ----------
+  function seed() {
+    for (var k = 0; k < 14; k++) {
+      stamp(W * 0.5 + (k - 7) * 1.5, H - 4 - k * 1.2, 3, (k - 7) * 1.5, -16, 0.7);
+    }
+  }
+
+  // 모션 최소화 선호 시: 자동 연기·재생 정지(드래그하면 재개)
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    cfg.auto = false; cfg.playing = false;
+    autoBtn.setAttribute("aria-pressed", "false");
+    playBtn.textContent = "재생";
+  } else {
+    seed();
+  }
+
+  setColor("#7fd8ff");
+  fitFont();
+  requestAnimationFrame(loop);
+})();
+</script>
+
+</body>
+</html>

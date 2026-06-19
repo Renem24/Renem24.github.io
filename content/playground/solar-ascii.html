@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ASCII 태양계</title>
+<style>
+  :root {
+    --bg: #04060d;
+    --panel-bg: rgba(8, 14, 26, 0.72);
+    --panel-border: rgba(120, 200, 230, 0.22);
+    --text: #cfe6f0;
+    --text-dim: #6f86a0;
+    --accent: #6fd6ff;
+    --accent2: #b98cff;
+    --glow: rgba(110, 214, 255, 0.18);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; width: 100%; height: 100%;
+    overflow: hidden; background: var(--bg);
+    font-family: ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", "DejaVu Sans Mono", monospace;
+    color: var(--text); -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── ASCII 렌더 표면 ───────────────────────────────────────────── */
+  #wrap {
+    position: absolute; inset: 0; display: flex;
+    align-items: center; justify-content: center; overflow: hidden;
+  }
+  #screen {
+    margin: 0; white-space: pre; line-height: 1.0; letter-spacing: 0;
+    font-family: inherit; font-weight: 500;
+    user-select: none; -webkit-user-select: none;
+    text-shadow: 0 0 4px rgba(0,0,0,0.6);
+    cursor: grab;
+  }
+  #screen.drag { cursor: grabbing; }
+
+  /* CRT 분위기: 스캔라인 + 비네팅 (텍스트 위 오버레이) */
+  #crt {
+    position: absolute; inset: 0; z-index: 3; pointer-events: none;
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px, rgba(0,0,0,0.16) 3px),
+      radial-gradient(circle at 50% 48%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.55) 100%);
+    mix-blend-mode: multiply;
+  }
+
+  /* 행성 라벨 */
+  #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+  .label {
+    position: absolute; transform: translate(-50%, -150%);
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text);
+    text-shadow: 0 0 6px rgba(0,0,0,0.95); white-space: nowrap;
+    padding: 1px 5px; pointer-events: auto; cursor: pointer;
+    opacity: 0.7; transition: opacity 0.18s, letter-spacing 0.18s;
+  }
+  .label::before {
+    content: ""; position: absolute; left: 50%; bottom: -4px;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--accent); box-shadow: 0 0 6px var(--accent); transform: translateX(-50%);
+  }
+  .label:hover { opacity: 1; letter-spacing: 0.18em; }
+
+  /* 공용 패널 */
+  .panel {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5), inset 0 0 0 1px var(--glow);
+  }
+
+  /* 컨트롤 패널 */
+  #ui {
+    position: absolute; top: 16px; left: 16px; z-index: 10;
+    padding: 14px 16px; min-width: 218px; font-size: 12.5px;
+  }
+  #ui .title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 2px; }
+  #ui h1 {
+    margin: 0; font-size: 15px; font-weight: 600; letter-spacing: 0.10em;
+    color: var(--accent);
+  }
+  #ui .tag { font-size: 9.5px; letter-spacing: 0.20em; text-transform: uppercase; color: var(--text-dim); }
+  #ui .divider { height: 1px; margin: 11px 0; background: linear-gradient(90deg, transparent, var(--panel-border), transparent); }
+  .row { display: flex; align-items: center; justify-content: space-between; margin: 10px 0; gap: 12px; }
+  .row label { color: var(--text-dim); }
+
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none; width: 112px; height: 3px; border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), rgba(120,200,230,0.18)); outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: #eaf6ff; box-shadow: 0 0 7px var(--accent); cursor: pointer;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 13px; height: 13px; border: 0; border-radius: 50%; background: #eaf6ff; box-shadow: 0 0 7px var(--accent); cursor: pointer;
+  }
+  input[type="checkbox"] { accent-color: var(--accent); width: 14px; height: 14px; cursor: pointer; }
+
+  .btn {
+    background: rgba(120, 200, 230, 0.10); color: var(--text);
+    border: 1px solid var(--panel-border); border-radius: 8px;
+    padding: 6px 9px; font-size: 11.5px; cursor: pointer; font-family: inherit;
+    transition: background 0.16s, transform 0.1s, box-shadow 0.16s;
+  }
+  .btn:hover { background: rgba(120, 200, 230, 0.22); box-shadow: 0 0 12px rgba(120,200,230,0.25); }
+  .btn:active { transform: scale(0.97); }
+  .btn-row { display: flex; gap: 8px; margin-top: 11px; }
+  .btn-row .btn { flex: 1; }
+
+  /* 정보 패널 */
+  #info {
+    position: absolute; bottom: 16px; right: 16px; z-index: 10; width: 252px; padding: 16px 18px;
+    transform: translateY(150%) scale(0.98); opacity: 0; transition: transform 0.38s cubic-bezier(.2,.9,.3,1), opacity 0.38s;
+  }
+  #info.show { transform: translateY(0) scale(1); opacity: 1; }
+  #info .head { display: flex; align-items: center; gap: 10px; margin-bottom: 11px; }
+  #info .swatch { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 9px currentColor; flex: none; }
+  #info h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.1; }
+  #info .sub { color: var(--text-dim); font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; }
+  #info dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: 12.5px; }
+  #info dt { color: var(--text-dim); }
+  #info dd { margin: 0; text-align: right; }
+  #info .close { position: absolute; top: 10px; right: 13px; cursor: pointer; color: var(--text-dim); font-size: 19px; line-height: 1; transition: color 0.15s; }
+  #info .close:hover { color: var(--text); }
+
+  #hint {
+    position: absolute; bottom: 16px; left: 16px; z-index: 5;
+    color: var(--text-dim); font-size: 11px; letter-spacing: 0.03em; padding: 8px 12px;
+  }
+  #loading {
+    position: absolute; inset: 0; z-index: 20; display: flex;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: radial-gradient(circle at 50% 45%, #08101f, #04060d);
+    color: var(--text-dim); font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase;
+    transition: opacity 0.6s;
+  }
+  #loading.hide { opacity: 0; pointer-events: none; }
+  #loading .spinner {
+    width: 26px; height: 26px; border: 2px solid rgba(120,200,230,0.18);
+    border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    #info { width: 200px; }
+    #ui { min-width: 184px; }
+  }
+</style>
+</head>
+<body>
+  <div id="wrap"><pre id="screen"></pre></div>
+  <div id="crt"></div>
+  <div id="labels"></div>
+
+  <div id="ui" class="panel">
+    <div class="title"><h1>SOLAR SYSTEM</h1><span class="tag">ASCII</span></div>
+    <div class="tag">문자 렌더 · 컬러</div>
+    <div class="divider"></div>
+    <div class="row">
+      <label for="speed">시간 속도</label>
+      <input type="range" id="speed" min="0" max="5" step="0.1" value="1" />
+    </div>
+    <div class="row">
+      <label for="orbits">궤도 표시</label>
+      <input type="checkbox" id="orbits" checked />
+    </div>
+    <div class="row">
+      <label for="labels-toggle">라벨 표시</label>
+      <input type="checkbox" id="labels-toggle" checked />
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="pause">일시정지</button>
+      <button class="btn" id="reset">시점 초기화</button>
+    </div>
+  </div>
+
+  <div id="info" class="panel">
+    <span class="close" id="info-close">&times;</span>
+    <div class="head">
+      <span class="swatch" id="info-swatch"></span>
+      <div>
+        <h2 id="info-name"></h2>
+        <div class="sub" id="info-sub"></div>
+      </div>
+    </div>
+    <dl id="info-facts"></dl>
+  </div>
+
+  <div id="hint" class="panel">드래그 회전 · 휠 확대 · 행성 클릭 추적</div>
+
+  <div id="loading"><div class="spinner"></div><div>태양계를 불러오는 중</div></div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════
+   컬러 ASCII 3D 태양계
+   - 외부 라이브러리/이미지 없음. 순수 JS 소프트웨어 래스터라이저.
+   - 렌더 방식: 각 천체를 화면-공간 광선-구 교차로 채우고, 표면 밝기를
+     문자 농담(ramp)에 매핑. 깊이 버퍼(z-buffer)로 가림 처리.
+   - 색상: 천체별 기준색 × 밝기 → 셀 단위 색. 동일 색 구간은 RLE로 묶어
+     <span> 하나로 출력(성능).
+   ════════════════════════════════════════════════════════════════════ */
+
+// ── 행성 데이터 (원본 보존) ─────────────────────────────────────────
+// size/orbit 는 보기 좋게 압축한 값이며 실제 비율이 아님(실제 비율로 두면 행성이 보이지 않음).
+// speed 는 상대적 공전 속도, spin 은 자전 속도, tilt 는 자전축 기울기(rad).
+// incl = 황도면 기준 궤도 경사(deg, 실제값), node = 승교점 황경(deg, 실제값) → 궤도면을 살짝 기울임.
+const PLANETS = [
+  { name: "수성", en: "Mercury", size: 0.38, orbit: 8,  speed: 1.61, spin: 0.01, tilt: 0.001, incl: 7.0, node: 48.3, style: "rocky", color: 0x9c8f80,
+    facts: { "지름": "약 4,879 km", "태양과의 거리": "약 5,790만 km", "공전 주기": "약 88일", "궤도 경사": "약 7.0°", "특징": "가장 작고 빠른 행성" } },
+  { name: "금성", en: "Venus", size: 0.62, orbit: 11, speed: 1.18, spin: -0.004, tilt: 3.09, incl: 3.4, node: 76.7, style: "cloudy", color: 0xd9b56a,
+    facts: { "지름": "약 12,104 km", "태양과의 거리": "약 1억 820만 km", "공전 주기": "약 225일", "궤도 경사": "약 3.4°", "특징": "두꺼운 대기, 역자전" } },
+  { name: "지구", en: "Earth", size: 0.65, orbit: 15, speed: 1.0,  spin: 0.02, tilt: 0.41, incl: 0.0, node: 0.0, style: "earth", color: 0x2a6dd6,
+    facts: { "지름": "약 12,742 km", "태양과의 거리": "약 1억 4,960만 km", "공전 주기": "약 365일", "궤도 경사": "0° (기준면)", "위성": "1개 (달)" } },
+  { name: "화성", en: "Mars", size: 0.5, orbit: 20, speed: 0.81, spin: 0.018, tilt: 0.44, incl: 1.85, node: 49.6, style: "rocky", color: 0xc1572f,
+    facts: { "지름": "약 6,779 km", "태양과의 거리": "약 2억 2,790만 km", "공전 주기": "약 687일", "궤도 경사": "약 1.85°", "특징": "붉은 행성, 위성 2개" } },
+  { name: "목성", en: "Jupiter", size: 1.9, orbit: 30, speed: 0.44, spin: 0.045, tilt: 0.05, incl: 1.3, node: 100.5, style: "banded", color: 0xc9a87c,
+    facts: { "지름": "약 139,820 km", "태양과의 거리": "약 7억 7,850만 km", "공전 주기": "약 11.9년", "궤도 경사": "약 1.3°", "특징": "최대 행성, 대적점" } },
+  { name: "토성", en: "Saturn", size: 1.6, orbit: 40, speed: 0.33, spin: 0.04, tilt: 0.47, incl: 2.5, node: 113.7, style: "banded", color: 0xe0c89a, ring: true,
+    facts: { "지름": "약 116,460 km", "태양과의 거리": "약 14억 km", "공전 주기": "약 29.5년", "궤도 경사": "약 2.5°", "특징": "뚜렷한 고리계" } },
+  { name: "천왕성", en: "Uranus", size: 1.1, orbit: 50, speed: 0.23, spin: -0.03, tilt: 1.71, incl: 0.77, node: 74.0, style: "icy", color: 0x9fe0e6,
+    facts: { "지름": "약 50,724 km", "태양과의 거리": "약 28억 7천만 km", "공전 주기": "약 84년", "궤도 경사": "약 0.77°", "특징": "옆으로 누워 자전" } },
+  { name: "해왕성", en: "Neptune", size: 1.05, orbit: 60, speed: 0.18, spin: 0.032, tilt: 0.49, incl: 1.77, node: 131.8, style: "icy", color: 0x3a5be0,
+    facts: { "지름": "약 49,244 km", "태양과의 거리": "약 45억 km", "공전 주기": "약 165년", "궤도 경사": "약 1.77°", "특징": "강한 폭풍, 가장 먼 행성" } },
+];
+// 혜성: 긴 타원·고경사 궤도를 케플러 운동으로 도는 천체.
+// (수치는 시각적 표현을 위한 예시값. 실제 특정 혜성을 재현한 것은 아님.)
+const COMET = { a: 40, e: 0.8, incl: 30, node: 60, speed: 0.55 }; // a=장반경, e=이심률
+COMET.b = COMET.a * Math.sqrt(1 - COMET.e * COMET.e);              // 단반경
+COMET.c = COMET.a * COMET.e;                                       // 초점 거리(태양이 한 초점)
+
+const DEG = Math.PI / 180;
+
+// ── ASCII 표현용 스케일 (저해상도 가독성을 위한 양식화) ───────────────
+// 원본도 크기/궤도가 실제 비율이 아님. 문자 격자는 해상도가 낮아 행성이
+// 한두 글자로 뭉개지므로, 구조(순서·상대 간격)는 유지한 채 보기 좋게 확대.
+const ORBIT_SCALE = 0.82;     // 궤도 반경 일괄 축소(가장 먼 행성도 화면에)
+const SIZE_BOOST  = 2.4;      // 행성 표시 반경 확대
+const MIN_R       = 1.7;      // 행성 최소 표시 반경(셀) — 저해상도에서 내행성도 보이게
+const SUN_R       = 6;        // 태양 표시 반경
+const COMET_R     = 0.9;      // 혜성 핵 표시 반경
+
+// 밝기 → 문자 농담. 왼쪽이 어둡고 오른쪽이 밝음. (&,<,> 는 제외해 이스케이프 회피)
+const RAMP = ".,:;-~=+*xcsoaeC0O#%@";
+const RAMP_N = RAMP.length;
+
+// ── 격자/투영 파라미터 ──────────────────────────────────────────────
+const COLS = 110, ROWS = 54;
+let focalX = COLS;            // 수평 초점거리(가로 화각 결정)
+let focalY = focalX * 0.55;   // 셀 종횡비 보정 후 측정값으로 갱신됨
+const NEAR = 0.2;
+
+// 버퍼
+const N = COLS * ROWS;
+const charBuf = new Uint8Array(N);   // RAMP 인덱스+1 (0 = 빈칸)
+const colBuf  = new Int32Array(N);   // 0xRRGGBB (양자화)
+const zBuf    = new Float32Array(N); // 깊이(작을수록 가까움)
+
+// ── 카메라 (target 주위 궤도) ────────────────────────────────────────
+const DEF = { yaw: 0.3, pitch: 0.43, dist: 125 };
+let yaw = DEF.yaw, pitch = DEF.pitch, dist = DEF.dist;
+const target = [0, 0, 0];
+const MIN_DIST = 14, MAX_DIST = 420;
+
+// ── 벡터 헬퍼 (저빈도 경로용) ────────────────────────────────────────
+function rotY(p, ang){ const c=Math.cos(ang),s=Math.sin(ang); return [c*p[0]+s*p[2], p[1], -s*p[0]+c*p[2]]; }
+function rotX(p, ang){ const c=Math.cos(ang),s=Math.sin(ang); return [p[0], c*p[1]-s*p[2], s*p[1]+c*p[2]]; }
+
+// 카메라 기저 계산. f=정면(시선), xc=오른쪽, yc=위.
+let ex=0, ey=0, ez=0;          // 카메라 위치
+let xc0=1,xc1=0,xc2=0, yc0=0,yc1=1,yc2=0, f0=0,f1=0,f2=1;
+function updateCamera(){
+  const cp=Math.cos(pitch), sp=Math.sin(pitch), cy=Math.cos(yaw), sy=Math.sin(yaw);
+  const offx=dist*cp*sy, offy=dist*sp, offz=dist*cp*cy;
+  ex=target[0]+offx; ey=target[1]+offy; ez=target[2]+offz;
+  // zc = (eye - target) 정규화 (시선 반대)
+  let zx=offx, zy=offy, zz=offz; const zl=Math.hypot(zx,zy,zz)||1; zx/=zl; zy/=zl; zz/=zl;
+  // xc = normalize(up × zc)
+  let rx = 1*zz - 0*zy, ry = 0*zx - 0*zz, rz = 0*zy - 1*zx; // up=(0,1,0)
+  const rl=Math.hypot(rx,ry,rz)||1; rx/=rl; ry/=rl; rz/=rl;
+  // yc = zc × xc
+  const ux = zy*rz - zz*ry, uy = zz*rx - zx*rz, uz = zx*ry - zy*rx;
+  xc0=rx; xc1=ry; xc2=rz;
+  yc0=ux; yc1=uy; yc2=uz;
+  f0=-zx; f1=-zy; f2=-zz; // 정면 = -zc
+}
+
+// 월드점 → 화면(셀 좌표) + 깊이. 깊이<=NEAR 면 null.
+function project(wx,wy,wz){
+  const rx=wx-ex, ry=wy-ey, rz=wz-ez;
+  const depth = rx*f0+ry*f1+rz*f2;
+  if(depth<=NEAR) return null;
+  const cx = rx*xc0+ry*xc1+rz*xc2;
+  const cy = rx*yc0+ry*yc1+rz*yc2;
+  const sx = COLS*0.5 + (cx/depth)*focalX;
+  const sy = ROWS*0.5 - (cy/depth)*focalY;
+  return [sx, sy, depth];
+}
+
+// ── 천체 구성 (태양/행성/혜성을 동일 구조로 일반화) ───────────────────
+function rgb(hex){ return [(hex>>16)&255, (hex>>8)&255, hex&255]; }
+
+const bodies = [];   // {name,en,facts, R, base[3], style, emissive, ring, axis[3], u1[3], u2[3], spinRate, spinAng, pos[3], proj}
+let sunBody;
+
+// 자전축/접선 기저(텍스처 회전용). 축은 z쪽으로 tilt 만큼 기운 Y축 근사.
+function makeAxis(tilt){
+  const ax=Math.sin(tilt), ay=Math.cos(tilt), az=0;
+  // u1 = normalize(axis × worldZ)
+  let u1x = ay*1 - az*0, u1y = az*0 - ax*1, u1z = ax*0 - ay*0;
+  const l1=Math.hypot(u1x,u1y,u1z)||1; u1x/=l1; u1y/=l1; u1z/=l1;
+  // u2 = axis × u1
+  const u2x = ay*u1z - az*u1y, u2y = az*u1x - ax*u1z, u2z = ax*u1y - ay*u1x;
+  return { axis:[ax,ay,az], u1:[u1x,u1y,u1z], u2:[u2x,u2y,u2z] };
+}
+
+// 태양
+{
+  sunBody = {
+    name:"태양", en:"Sun", info:true, R:SUN_R, base:rgb(0xffcf6e), style:"sun",
+    emissive:true, ring:false, ...makeAxis(0), spinRate:0.0008, spinAng:0,
+    orbit:0, pos:[0,0,0], proj:null,
+    facts:{ "지름":"약 1,392,000 km", "구성":"수소·헬륨", "표면 온도":"약 5,500°C", "특징":"태양계 질량의 99.8%" },
+  };
+  bodies.push(sunBody);
+}
+// 행성
+for(const p of PLANETS){
+  const b = {
+    name:p.name, en:p.en, info:true, facts:p.facts,
+    R: Math.max(MIN_R, p.size*SIZE_BOOST), base:rgb(p.color), style:p.style,
+    emissive:false, ring:!!p.ring, ...makeAxis(p.tilt),
+    spinRate:p.spin, spinAng:Math.random()*Math.PI*2,
+    orbit:p.orbit*ORBIT_SCALE, incl:p.incl, node:p.node, speed:p.speed,
+    angle:Math.random()*Math.PI*2, pos:[0,0,0], proj:null,
+  };
+  // 토성 고리 표시 반경(행성 표시 반경 기준)
+  if(b.ring){ b.ringInner=b.R*1.4; b.ringOuter=b.R*2.4; }
+  bodies.push(b);
+}
+// 혜성
+const cometBody = {
+  name:"혜성", en:"Comet (예시)", info:true, R:COMET_R, base:rgb(0xcfe8ff), style:"comet",
+  emissive:true, ring:false, ...makeAxis(0), spinRate:0, spinAng:0,
+  M: Math.random()*Math.PI*2, pos:[0,0,0], proj:null,
+  facts:{ "궤도":"긴 타원", "이심률":"약 0.8", "궤도 경사":"약 30°", "특징":"근일점에서 가속, 태양 반대로 꼬리" },
+};
+bodies.push(cometBody);
+
+// ── 별(정적, 시드 고정) ─────────────────────────────────────────────
+const STARS = [];
+(function(){
+  let seed = 1337;
+  const rnd = ()=> (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  for(let i=0;i<260;i++){
+    const c = (rnd()*COLS)|0, r = (rnd()*ROWS)|0;
+    const b = rnd();
+    const ch = b<0.6 ? 1 : 2;               // '.' 또는 ',' 인덱스
+    const v = 90 + (b*120|0);
+    STARS.push([r*COLS+c, ch, (v<<16)|(v<<8)|(Math.min(255,v+20))]);
+  }
+})();
+
+// ── 천체 위치 업데이트 ──────────────────────────────────────────────
+function updatePositions(dt){
+  // 태양
+  sunBody.spinAng += sunBody.spinRate * (dt>0?1:0);
+  // 행성: 궤도면(node→incl)을 적용한 원궤도
+  for(let i=0;i<bodies.length;i++){
+    const b=bodies[i];
+    if(b.style==="sun" || b.style==="comet") continue;
+    b.angle += b.speed*dt*0.15;
+    b.spinAng += b.spinRate;
+    let p=[Math.cos(b.angle)*b.orbit, 0, Math.sin(b.angle)*b.orbit];
+    p=rotX(p, b.incl*DEG); p=rotY(p, b.node*DEG);
+    b.pos[0]=p[0]; b.pos[1]=p[1]; b.pos[2]=p[2];
+  }
+  // 혜성: 케플러 방정식(M = E - e·sinE)을 풀어 근일점에서 빨라지는 운동
+  cometBody.M += COMET.speed*dt*0.15;
+  let E=cometBody.M;
+  for(let k=0;k<5;k++) E = E - (E - COMET.e*Math.sin(E) - cometBody.M)/(1 - COMET.e*Math.cos(E));
+  const a=COMET.a*ORBIT_SCALE, b2=COMET.b*ORBIT_SCALE, cc=COMET.c*ORBIT_SCALE;
+  let cp=[a*Math.cos(E)-cc, 0, b2*Math.sin(E)];
+  cp=rotX(cp, COMET.incl*DEG); cp=rotY(cp, COMET.node*DEG);
+  cometBody.pos[0]=cp[0]; cometBody.pos[1]=cp[1]; cometBody.pos[2]=cp[2];
+}
+
+// ── 셰이딩: 천체별 표면색/밝기 ───────────────────────────────────────
+function noise2(x,y){ return Math.sin(x*5.0+y*7.0)*Math.sin(x*3.0-y*4.0); } // [-1,1]
+
+// 화면-공간 구 래스터. (핫 루프 — 객체/배열 할당 없이 스칼라만 사용)
+function rasterSphere(b){
+  const Cx=b.pos[0], Cy=b.pos[1], Cz=b.pos[2], R=b.R, R2=R*R;
+  // 화면상 중심/반경
+  const pr = project(Cx,Cy,Cz);
+  b.proj = null;
+  if(!pr) return;
+  const sx=pr[0], sy=pr[1], depth=pr[2];
+  const prx = R*focalX/depth, pry = R*focalY/depth;
+  b.proj = { sx, sy, prx, pry, depth };
+  if(sx+prx<0 || sx-prx>=COLS || sy+pry<0 || sy-pry>=ROWS) return;
+
+  const Lx=Cx-ex, Ly=Cy-ey, Lz=Cz-ez;
+  const LL = Lx*Lx+Ly*Ly+Lz*Lz;
+  const x0=Math.max(0,Math.floor(sx-prx)), x1=Math.min(COLS-1,Math.ceil(sx+prx));
+  const y0=Math.max(0,Math.floor(sy-pry)), y1=Math.min(ROWS-1,Math.ceil(sy+pry));
+
+  const br=b.base[0], bg=b.base[1], bb=b.base[2];
+  const ax=b.axis[0],ay=b.axis[1],az=b.axis[2];
+  const u1x=b.u1[0],u1y=b.u1[1],u1z=b.u1[2];
+  const u2x=b.u2[0],u2y=b.u2[1],u2z=b.u2[2];
+  const spin=b.spinAng;
+  const style=b.style, emissive=b.emissive;
+  const amb=0.07;
+
+  for(let py=y0; py<=y1; py++){
+    const ndy = -((py+0.5 - ROWS*0.5)/focalY);
+    // 행 고정 성분: yc*ndy + f
+    const ry0 = yc0*ndy + f0, ry1 = yc1*ndy + f1, ry2 = yc2*ndy + f2;
+    const rowOff = py*COLS;
+    for(let px=x0; px<=x1; px++){
+      const ndx = (px+0.5 - COLS*0.5)/focalX;
+      let dx = xc0*ndx + ry0;
+      let dy = xc1*ndx + ry1;
+      let dz = xc2*ndx + ry2;
+      const dl = Math.sqrt(dx*dx+dy*dy+dz*dz);
+      dx/=dl; dy/=dl; dz/=dl;
+      const tca = dx*Lx+dy*Ly+dz*Lz;
+      if(tca<=0) continue;
+      const d2 = LL - tca*tca;
+      if(d2>R2) continue;
+      const t = tca - Math.sqrt(R2-d2);
+      const i = rowOff+px;
+      if(t>=zBuf[i]) continue;
+
+      // 표면점/법선(월드)
+      const wx=ex+dx*t, wy=ey+dy*t, wz=ez+dz*t;
+      const nx=(wx-Cx)/R, ny=(wy-Cy)/R, nz=(wz-Cz)/R;
+
+      let bright, cr, cg, cb;
+
+      if(emissive){
+        if(style==="sun"){
+          // 중심이 가장 뜨겁고 가장자리로 갈수록 주황 → 적색
+          const edge = d2/R2;                 // 0(중심)~1(가장자리)
+          bright = 1 - 0.45*edge;
+          const flick = 0.94 + 0.06*Math.sin(spin*40 + nx*9 + ny*7);
+          bright *= flick;
+          // 색: 백황(중심) → 주황(가장자리)
+          cr = 255;
+          cg = 245 - (170*edge)|0;
+          cb = 200 - (190*edge)|0;
+        } else { // 혜성 핵
+          bright = 1.0;
+          cr=210; cg=235; cb=255;
+        }
+      } else {
+        // 램버트: 태양(원점) 방향 광원
+        const wl=Math.sqrt(wx*wx+wy*wy+wz*wz)||1;
+        const lxv=-wx/wl, lyv=-wy/wl, lzv=-wz/wl;
+        let diff = nx*lxv+ny*lyv+nz*lzv; if(diff<0) diff=0;
+        bright = amb + (1-amb)*diff;
+
+        // 표면 좌표(자전 반영) — 회전이 보이도록 lon 에 spin 가산
+        const lat = nx*ax+ny*ay+nz*az;                      // [-1,1]
+        const pu = nx*u1x+ny*u1y+nz*u1z;
+        const pv = nx*u2x+ny*u2y+nz*u2z;
+        const lon = Math.atan2(pv, pu) + spin;
+
+        cr=br; cg=bg; cb=bb;
+        if(style==="banded"){
+          bright *= 0.84 + 0.16*Math.sin(lat*8.0);          // 위도 띠
+          bright *= 0.96 + 0.04*Math.sin(lon*3.0);          // 경도 미세 변화(회전 가시화)
+        } else if(style==="earth"){
+          const land = (Math.sin(lon*4.0)*Math.cos(lat*3.0) + Math.sin(lon*7.0+1.5)*0.5) > 0.18;
+          if(Math.abs(lat)>0.82){ cr=235; cg=242; cb=250; }  // 극관
+          else if(land){ cr=58; cg=107; cb=53; }             // 대륙
+          else { cr=30; cg=92; cb=170; }                     // 바다
+        } else if(style==="cloudy"){
+          bright *= 0.9 + 0.1*noise2(lon, lat);
+        } else { // rocky / icy
+          bright *= 0.88 + 0.12*noise2(lon*1.5, lat*1.5);
+        }
+      }
+
+      if(bright>1) bright=1; else if(bright<0) bright=0;
+
+      // 빈칸 방지: 천체 내부는 최소 1단계 표시(원반 실루엣 유지)
+      let idx = Math.round(bright*(RAMP_N-1));
+      if(idx<1) idx=1; if(idx>RAMP_N-1) idx=RAMP_N-1;
+
+      // 색 = 기준색 × 밝기(약간의 바닥값) → 양자화
+      const shade = emissive ? 1.0 : (0.16 + 0.84*bright);
+      let R8=(cr*shade)|0, G8=(cg*shade)|0, B8=(cb*shade)|0;
+      if(R8>255)R8=255; if(G8>255)G8=255; if(B8>255)B8=255;
+      R8&=0xF0; G8&=0xF0; B8&=0xF0;
+
+      charBuf[i]=idx+1; colBuf[i]=(R8<<16)|(G8<<8)|B8; zBuf[i]=t;
+    }
+  }
+}
+
+// 토성 고리: 적도면(자전축 ⊥) 환형을 점 샘플로 래스터.
+function rasterRing(b){
+  if(!b.ring) return;
+  const ax=b.axis[0],ay=b.axis[1],az=b.axis[2];
+  const u1x=b.u1[0],u1y=b.u1[1],u1z=b.u1[2];
+  const u2x=b.u2[0],u2y=b.u2[1],u2z=b.u2[2];
+  const Cx=b.pos[0],Cy=b.pos[1],Cz=b.pos[2];
+  const steps=240;
+  for(let s=0;s<steps;s++){
+    const th=(s/steps)*Math.PI*2; const ct=Math.cos(th), st=Math.sin(th);
+    for(let rr=0; rr<5; rr++){
+      const tr = rr/4;                                   // 0~1 반경 비율
+      // 카시니 간극(중간)·엥케 간극(바깥) 흉내 → 건너뜀
+      if(tr>0.44 && tr<0.52) continue;
+      if(tr>0.78 && tr<0.83) continue;
+      const rad = b.ringInner + (b.ringOuter-b.ringInner)*tr;
+      const wx = Cx + (ct*rad)*u1x + (st*rad)*u2x;
+      const wy = Cy + (ct*rad)*u1y + (st*rad)*u2y;
+      const wz = Cz + (ct*rad)*u1z + (st*rad)*u2z;
+      const pr = project(wx,wy,wz);
+      if(!pr) continue;
+      const px=pr[0]|0, py=pr[1]|0, t=pr[2];
+      if(px<0||px>=COLS||py<0||py>=ROWS) continue;
+      const i=py*COLS+px;
+      if(t>=zBuf[i]) continue;
+      const bright = 0.55 + 0.25*Math.abs(Math.sin(th*1.3));
+      let idx=Math.round(bright*(RAMP_N-1)); if(idx<1)idx=1;
+      let R8=(214*bright)|0, G8=(192*bright)|0, B8=(150*bright)|0;
+      R8&=0xF0; G8&=0xF0; B8&=0xF0;
+      charBuf[i]=idx+1; colBuf[i]=(R8<<16)|(G8<<8)|B8; zBuf[i]=t;
+    }
+  }
+}
+
+// 궤도선: 점선(dim). 깊이 비교로 천체 뒤는 가려짐.
+function rasterOrbits(){
+  if(!orbitsOn) return;
+  const dimCol = 0x303a70 & 0xF0F0F0;
+  // 행성 궤도
+  for(const b of bodies){
+    if(b.style==="sun"||b.style==="comet") continue;
+    const segs=140;
+    for(let s=0;s<segs;s++){
+      const a=(s/segs)*Math.PI*2;
+      let p=[Math.cos(a)*b.orbit,0,Math.sin(a)*b.orbit];
+      p=rotX(p,b.incl*DEG); p=rotY(p,b.node*DEG);
+      plotDot(p[0],p[1],p[2],dimCol);
+    }
+  }
+  // 혜성 궤도
+  const a=COMET.a*ORBIT_SCALE, bb=COMET.b*ORBIT_SCALE, cc=COMET.c*ORBIT_SCALE, segs=220;
+  for(let s=0;s<segs;s++){
+    const th=(s/segs)*Math.PI*2;
+    let p=[a*Math.cos(th)-cc,0,bb*Math.sin(th)];
+    p=rotX(p,COMET.incl*DEG); p=rotY(p,COMET.node*DEG);
+    plotDot(p[0],p[1],p[2], 0x405a80 & 0xF0F0F0);
+  }
+}
+function plotDot(wx,wy,wz,col){
+  const pr=project(wx,wy,wz); if(!pr) return;
+  const px=pr[0]|0, py=pr[1]|0, t=pr[2];
+  if(px<0||px>=COLS||py<0||py>=ROWS) return;
+  const i=py*COLS+px;
+  if(t>=zBuf[i]) return;
+  charBuf[i]=1; colBuf[i]=col; zBuf[i]=t; // '.' (RAMP[0])
+}
+
+// 혜성 꼬리: 태양 반대 방향으로 뻗는 입자(월드). 가까울수록 길게.
+function rasterTail(){
+  const cw=cometBody.pos; const hl=Math.hypot(cw[0],cw[1],cw[2])||1;
+  const dx=cw[0]/hl, dy=cw[1]/hl, dz=cw[2]/hl;   // 태양→혜성 방향(꼬리 방향)
+  const tailLen = Math.max(0.5, Math.min(4, 60/hl)) * 12;
+  const Ntail=44;
+  for(let k=0;k<Ntail;k++){
+    const tt=k/Ntail;
+    const jx=(Math.random()-0.5)*tt*2.0, jy=(Math.random()-0.5)*tt*2.0, jz=(Math.random()-0.5)*tt*2.0;
+    const wx=cw[0]+dx*tailLen*tt+jx, wy=cw[1]+dy*tailLen*tt+jy, wz=cw[2]+dz*tailLen*tt+jz;
+    const pr=project(wx,wy,wz); if(!pr) continue;
+    const px=pr[0]|0, py=pr[1]|0, t=pr[2];
+    if(px<0||px>=COLS||py<0||py>=ROWS) continue;
+    const i=py*COLS+px;
+    if(t>=zBuf[i]) continue;
+    const fade=1-tt;
+    let idx=Math.round(fade*6); if(idx<0)idx=0;
+    let R8=(140*fade)|0, G8=(190*fade)|0, B8=(255*fade)|0;
+    R8&=0xF0; G8&=0xF0; B8&=0xF0;
+    charBuf[i]=idx+1; colBuf[i]=(R8<<16)|(G8<<8)|B8; zBuf[i]=t;
+  }
+}
+
+// ── 한 프레임 합성 ──────────────────────────────────────────────────
+const screenEl = document.getElementById("screen");
+function renderFrame(){
+  charBuf.fill(0); colBuf.fill(0); zBuf.fill(1e9);
+  // 별(가장 뒤)
+  for(let s=0;s<STARS.length;s++){
+    const st=STARS[s]; const i=st[0];
+    if(zBuf[i]<1e8) continue;
+    charBuf[i]=st[1]; colBuf[i]=st[2]; zBuf[i]=9e8;
+  }
+  rasterOrbits();
+  // 천체: 먼 것부터(깊이 버퍼가 처리하지만 안전)
+  for(const b of bodies){
+    if(b.style==="comet"){ rasterSphere(b); rasterTail(); }
+    else { rasterSphere(b); if(b.ring) rasterRing(b); }
+  }
+
+  // RLE 색상 합성
+  let html="";
+  for(let py=0; py<ROWS; py++){
+    const off=py*COLS;
+    let line="", run="", runKey=-2;
+    for(let px=0; px<COLS; px++){
+      const i=off+px; const c=charBuf[i];
+      let key, ch;
+      if(c===0){ key=-1; ch=" "; }
+      else { key=colBuf[i]; ch=RAMP[c-1]; }
+      if(key!==runKey){
+        if(runKey===-1) line+=run;
+        else if(run) line+="<span style=\"color:#"+("000000"+runKey.toString(16)).slice(-6)+"\">"+run+"</span>";
+        run=""; runKey=key;
+      }
+      run+=ch;
+    }
+    if(runKey===-1) line+=run;
+    else if(run) line+="<span style=\"color:#"+("000000"+runKey.toString(16)).slice(-6)+"\">"+run+"</span>";
+    html+=line+"\n";
+  }
+  screenEl.innerHTML=html;
+}
+
+// ── 라벨 ─────────────────────────────────────────────────────────────
+const labelLayer=document.getElementById("labels");
+const labelEls=new Map();
+for(const b of bodies){
+  if(b.style==="sun") continue;
+  const el=document.createElement("div");
+  el.className="label"; el.textContent=b.name;
+  el.addEventListener("click",(e)=>{ e.stopPropagation(); focusBody(b); });
+  labelLayer.appendChild(el); labelEls.set(b, el);
+}
+let cellW=8, cellH=14, preLeft=0, preTop=0;
+function measureCells(){
+  const r=screenEl.getBoundingClientRect();
+  preLeft=r.left; preTop=r.top;
+  cellW=r.width/COLS; cellH=r.height/ROWS;
+  // 셀 종횡비로 수직 초점거리 보정 → 구가 둥글게 보이도록
+  focalY = focalX * (cellW/cellH);
+}
+function positionLabels(){
+  for(const [b,el] of labelEls){
+    const pr=b.proj;
+    if(!labelsOn || !pr || pr.depth<=NEAR || pr.sx<0||pr.sx>=COLS||pr.sy<0||pr.sy>=ROWS){
+      el.style.display="none"; continue;
+    }
+    el.style.display="block";
+    el.style.left=(preLeft + pr.sx*cellW)+"px";
+    el.style.top =(preTop + (pr.sy-pr.pry)*cellH)+"px";
+  }
+}
+
+// ── 폰트 크기/레이아웃 ───────────────────────────────────────────────
+function layout(){
+  const vw=window.innerWidth, vh=window.innerHeight;
+  // 모노스페이스 글자 폭 ≈ 0.6em 가정 → 두 제약 중 작은 값
+  const fs=Math.min(vw/(COLS*0.62), vh/ROWS);
+  screenEl.style.fontSize=fs+"px";
+  measureCells();
+}
+window.addEventListener("resize", ()=>{ layout(); });
+
+// ── 상호작용 ─────────────────────────────────────────────────────────
+let focused=null;
+function focusBody(b){
+  focused=b;
+  showInfo(b);
+}
+function clearFocus(){ focused=null; hideInfo(); }
+
+let dragging=false, moved=false, lastX=0, lastY=0, downX=0, downY=0;
+screenEl.addEventListener("pointerdown",(e)=>{
+  dragging=true; moved=false; lastX=downX=e.clientX; lastY=downY=e.clientY;
+  screenEl.classList.add("drag"); screenEl.setPointerCapture(e.pointerId);
+});
+screenEl.addEventListener("pointermove",(e)=>{
+  if(!dragging) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY; lastX=e.clientX; lastY=e.clientY;
+  if(Math.abs(e.clientX-downX)+Math.abs(e.clientY-downY)>4) moved=true;
+  yaw -= dx*0.006;
+  pitch += dy*0.006;
+  const lim=Math.PI/2-0.05; if(pitch>lim)pitch=lim; if(pitch<-lim)pitch=-lim;
+});
+screenEl.addEventListener("pointerup",(e)=>{
+  dragging=false; screenEl.classList.remove("drag");
+  if(!moved) pickAt(e.clientX, e.clientY);
+});
+screenEl.addEventListener("wheel",(e)=>{
+  e.preventDefault();
+  dist *= Math.exp(e.deltaY*0.0011);
+  if(dist<MIN_DIST)dist=MIN_DIST; if(dist>MAX_DIST)dist=MAX_DIST;
+},{passive:false});
+
+// 클릭 위치 → 가장 가까운(깊이) 천체 원반 선택
+function pickAt(clientX, clientY){
+  const col=(clientX-preLeft)/cellW, row=(clientY-preTop)/cellH;
+  let best=null, bestD=1e9;
+  for(const b of bodies){
+    const pr=b.proj; if(!pr) continue;
+    const dxp=(col-pr.sx)/Math.max(1.2,pr.prx), dyp=(row-pr.sy)/Math.max(1.2,pr.pry);
+    if(dxp*dxp+dyp*dyp<=1.6 && pr.depth<bestD){ best=b; bestD=pr.depth; }
+  }
+  if(best) focusBody(best);
+}
+
+// ── 정보 패널 ────────────────────────────────────────────────────────
+const infoEl=document.getElementById("info");
+function showInfo(b){
+  document.getElementById("info-name").textContent=b.name;
+  document.getElementById("info-sub").textContent=b.en;
+  const sw=document.getElementById("info-swatch");
+  const hex="#"+("000000"+((b.base[0]<<16)|(b.base[1]<<8)|b.base[2]).toString(16)).slice(-6);
+  sw.style.background=hex; sw.style.color=hex;
+  const dl=document.getElementById("info-facts"); dl.innerHTML="";
+  for(const [k,v] of Object.entries(b.facts)){
+    const dt=document.createElement("dt"); dt.textContent=k;
+    const dd=document.createElement("dd"); dd.textContent=v;
+    dl.appendChild(dt); dl.appendChild(dd);
+  }
+  infoEl.classList.add("show");
+}
+function hideInfo(){ infoEl.classList.remove("show"); }
+document.getElementById("info-close").addEventListener("click", clearFocus);
+
+// ── UI 컨트롤 ────────────────────────────────────────────────────────
+let timeScale=1, paused=false, orbitsOn=true, labelsOn=true;
+document.getElementById("speed").addEventListener("input",(e)=>{ timeScale=parseFloat(e.target.value); });
+document.getElementById("pause").addEventListener("click",(e)=>{
+  paused=!paused; e.target.textContent=paused?"재생":"일시정지";
+});
+document.getElementById("reset").addEventListener("click",()=>{
+  clearFocus(); yaw=DEF.yaw; pitch=DEF.pitch; dist=DEF.dist; target[0]=target[1]=target[2]=0;
+});
+document.getElementById("orbits").addEventListener("change",(e)=>{ orbitsOn=e.target.checked; });
+document.getElementById("labels-toggle").addEventListener("change",(e)=>{ labelsOn=e.target.checked; });
+
+// ── 애니메이션 루프 ──────────────────────────────────────────────────
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let last=performance.now();
+let introT = reduceMotion ? 1 : 0;
+const introDur=2.4;
+const introStart={pitch:0.95, dist:260};
+
+function frame(now){
+  let raw=(now-last)/1000; last=now;
+  if(raw>0.05) raw=0.05;
+  const dt = raw*(paused?0:timeScale);
+
+  updatePositions(dt);
+
+  // 진입 연출
+  if(introT<1){
+    introT=Math.min(1, introT+raw/introDur);
+    const k=1-Math.pow(1-introT,3);
+    pitch = introStart.pitch + (DEF.pitch-introStart.pitch)*k;
+    dist  = introStart.dist  + (DEF.dist -introStart.dist )*k;
+  } else if(focused){
+    // 포커스 천체 추적: target 을 천체로 부드럽게 이동
+    target[0]+=(focused.pos[0]-target[0])*0.08;
+    target[1]+=(focused.pos[1]-target[1])*0.08;
+    target[2]+=(focused.pos[2]-target[2])*0.08;
+    const want=Math.max(MIN_DIST, focused.R*9);
+    dist+=(want-dist)*0.04;
+  } else {
+    target[0]+= (0-target[0])*0.06; target[1]+=(0-target[1])*0.06; target[2]+=(0-target[2])*0.06;
+  }
+
+  updateCamera();
+  renderFrame();
+  positionLabels();
+  requestAnimationFrame(frame);
+}
+
+// ── 시작 ─────────────────────────────────────────────────────────────
+updateCamera();
+renderFrame();        // 1차 렌더(콘텐츠 채움)
+layout();             // 콘텐츠가 있는 상태에서 셀 크기 측정 → focalY 보정
+renderFrame();        // 보정된 focalY 로 재렌더
+positionLabels();
+const loadingEl=document.getElementById("loading");
+loadingEl.classList.add("hide");
+setTimeout(()=>{ loadingEl.style.display="none"; }, 700);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
