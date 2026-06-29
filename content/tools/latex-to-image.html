@@ -1,0 +1,816 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<!--
+  Specimen — LaTeX 수식을 이미지로
+  단일 파일 웹앱: MathJax(SVG 출력)로 수식을 렌더링하고
+  PNG 클립보드 복사 / PNG·SVG 다운로드를 지원합니다.
+-->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specimen — LaTeX 수식을 이미지로</title>
+
+<!-- MathJax 설정: SVG 출력, fontCache 'none' → 글리프 path를 SVG 내부에 인라인 (자체 완결 → 안전한 래스터화) -->
+<script>
+  window.MathJax = {
+    loader: { load: ['[tex]/ams', '[tex]/color', '[tex]/boldsymbol', '[tex]/cancel', '[tex]/mhchem'] },
+    tex: {
+      packages: { '[+]': ['ams', 'color', 'boldsymbol', 'cancel', 'mhchem'] },
+      inlineMath: [['\\(', '\\)']],
+      displayMath: [['$$', '$$'], ['\\[', '\\]']]
+    },
+    svg: { fontCache: 'none' },
+    startup: { typeset: false }
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.2.2/es5/tex-svg-full.min.js" id="mjx"></script>
+
+<style>
+  :root {
+    --paper:      #F7F6F1;
+    --panel:      #FFFFFF;
+    --ink:        #16161D;
+    --muted:      #6E6E78;
+    --faint:      #9A9AA2;
+    --line:       #E5E2D9;
+    --line-soft:  #EFEDE6;
+    --accent:     #2746C9;
+    --accent-ink: #1E3299;
+    --accent-soft:#EAEDFB;
+    --danger:     #B23A3A;
+    --ok:         #1F7A4D;
+
+    --serif: ui-serif, "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans:  ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --mono:  ui-monospace, "JetBrains Mono", "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 22px 64px; }
+
+  /* ---- 헤더 ---- */
+  .masthead {
+    display: flex; align-items: baseline; gap: 16px;
+    padding-bottom: 18px; margin-bottom: 24px;
+    border-bottom: 1px solid var(--line);
+    flex-wrap: wrap;
+  }
+  .mark {
+    font-family: var(--serif);
+    font-size: 30px; font-weight: 600; letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .mark .tex { font-style: italic; }
+  .mark .tex::after {
+    content: ""; display: inline-block;
+    width: 7px; height: 7px; margin-left: 2px; border-radius: 50%;
+    background: var(--accent); vertical-align: super;
+  }
+  .tagline { font-size: 13px; color: var(--muted); }
+  .tagline code { font-family: var(--mono); color: var(--accent-ink); }
+
+  /* ---- 레이아웃 ---- */
+  .board { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+  @media (max-width: 860px) { .board { grid-template-columns: 1fr; } }
+
+  .col-head {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--faint); margin: 0 2px 9px;
+  }
+  .col-head .ix { font-family: var(--mono); color: var(--accent); font-size: 12px; }
+
+  /* ---- 패널 ---- */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    box-shadow: 0 1px 0 rgba(22,22,29,0.02), 0 8px 24px -18px rgba(22,22,29,0.25);
+  }
+
+  /* ---- 에디터 ---- */
+  .editor-pad { padding: 14px 14px 12px; }
+  textarea#src {
+    width: 100%; min-height: 150px; resize: vertical;
+    border: 0; outline: 0; background: transparent;
+    font-family: var(--mono); font-size: 15px; line-height: 1.7;
+    color: var(--ink); tab-size: 2;
+  }
+  textarea#src::placeholder { color: var(--faint); }
+
+  .chips {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding: 10px 12px; border-top: 1px solid var(--line-soft);
+  }
+  .chip {
+    font-family: var(--mono); font-size: 12px;
+    padding: 4px 8px; border: 1px solid var(--line);
+    background: #fff; border-radius: 7px; color: var(--ink);
+    cursor: pointer; transition: all .12s ease;
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent-ink); background: var(--accent-soft); }
+  .chip.lbl { border: 0; background: transparent; color: var(--faint); cursor: default; padding-left: 0; }
+
+  /* ---- 미리보기 명세 카드 ---- */
+  .specimen {
+    position: relative;
+    min-height: 220px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 30px 22px;
+    border-radius: 12px 12px 0 0;
+    overflow: auto;
+  }
+  .specimen.bg-transparent {
+    background-color: #fff;
+    background-image:
+      linear-gradient(45deg, #ececec 25%, transparent 25%),
+      linear-gradient(-45deg, #ececec 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #ececec 75%),
+      linear-gradient(-45deg, transparent 75%, #ececec 75%);
+    background-size: 18px 18px;
+    background-position: 0 0, 0 9px, 9px -9px, -9px 0;
+  }
+  /* 측정 전용(화면 밖) SVG — 내보내기 크기 계산용 */
+  #measureWrap { position: fixed; left: -99999px; top: 0; pointer-events: none; }
+  #preview { font-size: 40px; display: inline-block; }
+  #preview svg { vertical-align: middle; }
+  /* 미리보기 = 실제 내보낼 PNG (우클릭 → 이미지 복사 가능) */
+  #specimenImg { max-width: 100%; max-height: 220px; vertical-align: middle; }
+
+  .err {
+    font-family: var(--mono); font-size: 13px; color: var(--danger);
+    text-align: center; padding: 0 12px;
+  }
+
+  /* 명세 하단 메타 바 */
+  .meta {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 9px 14px; border-top: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 12px; color: var(--muted);
+    border-radius: 0 0 12px 12px; flex-wrap: wrap;
+  }
+  .meta .dim b { color: var(--ink); font-weight: 600; }
+
+  /* ---- 컨트롤 ---- */
+  .controls { margin-top: 18px; }
+  .ctrl-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 2px; flex-wrap: wrap;
+  }
+  .ctrl-row + .ctrl-row { border-top: 1px solid var(--line-soft); }
+  .ctrl-label { font-size: 12px; color: var(--muted); width: 86px; flex: none; }
+
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: #fff; }
+  .seg button {
+    font-family: var(--sans); font-size: 12.5px; color: var(--ink);
+    padding: 6px 12px; border: 0; background: transparent; cursor: pointer;
+    border-right: 1px solid var(--line); transition: background .12s;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button:hover { background: var(--accent-soft); }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+
+  .swatches { display: inline-flex; gap: 6px; align-items: center; }
+  .sw {
+    width: 22px; height: 22px; border-radius: 6px; cursor: pointer;
+    border: 1px solid var(--line); padding: 0;
+  }
+  .sw[aria-pressed="true"] { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .sw.chk {
+    background-color: #fff;
+    background-image:
+      linear-gradient(45deg,#ddd 25%,transparent 25%),
+      linear-gradient(-45deg,#ddd 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#ddd 75%),
+      linear-gradient(-45deg,transparent 75%,#ddd 75%);
+    background-size: 10px 10px; background-position: 0 0,0 5px,5px -5px,-5px 0;
+  }
+  input[type="color"] {
+    width: 28px; height: 24px; padding: 0; border: 1px solid var(--line);
+    border-radius: 6px; background: #fff; cursor: pointer;
+  }
+  input[type="range"] { accent-color: var(--accent); }
+  .pad-val { font-family: var(--mono); font-size: 12px; color: var(--muted); width: 42px; }
+
+  /* ---- 액션 ---- */
+  .actions { display: flex; gap: 10px; margin-top: 22px; flex-wrap: wrap; }
+  .btn {
+    font-family: var(--sans); font-size: 14px; font-weight: 500;
+    padding: 11px 16px; border-radius: 9px; cursor: pointer;
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    transition: all .12s ease; display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent-ink); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover:not(:disabled) { background: var(--accent-ink); color: #fff; }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn svg { width: 16px; height: 16px; }
+
+  /* ---- 토스트 ---- */
+  #toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%) translateY(14px);
+    background: var(--ink); color: #fff; font-size: 13.5px;
+    padding: 10px 16px; border-radius: 9px; opacity: 0; pointer-events: none;
+    transition: all .22s ease; box-shadow: 0 10px 30px -12px rgba(0,0,0,.5); z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #toast.danger { background: var(--danger); }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="mark"><span class="tex">Specimen</span></div>
+    <div class="tagline"><code>LaTeX</code> 수식을 입력하면 또렷한 이미지로 만들어 복사·저장합니다</div>
+  </header>
+
+  <div class="board">
+    <!-- 좌: 소스 -->
+    <section>
+      <div class="col-head"><span class="ix">01</span> 소스</div>
+      <div class="panel">
+        <div class="editor-pad">
+          <textarea id="src" spellcheck="false" placeholder="예) \frac{\partial L}{\partial w} = \sum_{i=1}^{N} (\hat{y}_i - y_i)\, x_i">E = mc^2</textarea>
+        </div>
+        <div class="chips" id="chips">
+          <span class="chip lbl">빠른 삽입</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 우: 명세 미리보기 -->
+    <section>
+      <div class="col-head"><span class="ix">02</span> 명세 · 미리보기</div>
+      <div class="panel">
+        <div class="specimen bg-transparent" id="specimen">
+          <img id="specimenImg" alt="수식 미리보기" style="display:none">
+          <div class="err" id="err" style="display:none"></div>
+        </div>
+        <div class="meta">
+          <span class="dim">출력 크기 <b id="dim">—</b></span>
+          <span id="pngSize"></span>
+          <span id="scaleNote">배율 4×</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 컨트롤 -->
+  <div class="controls panel" style="padding:6px 16px; margin-top:20px;">
+    <div class="ctrl-row">
+      <span class="ctrl-label">표시 모드</span>
+      <div class="seg" id="modeSeg">
+        <button data-mode="display" aria-pressed="true">디스플레이</button>
+        <button data-mode="inline" aria-pressed="false">인라인</button>
+      </div>
+      <span class="ctrl-label" style="width:auto; margin-left:8px;">여러 줄</span>
+      <div class="seg" id="multiSeg">
+        <button data-multi="off" aria-pressed="true">끄기</button>
+        <button data-multi="on" aria-pressed="false">켜기</button>
+      </div>
+      <span style="font-size:11.5px; color:var(--faint);">켜면 <code style="font-family:var(--mono)">\\</code> 줄바꿈 적용</span>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">글자 색</span>
+      <div class="swatches" id="textSw">
+        <button class="sw" style="background:#16161D" data-color="#16161D" aria-pressed="true" title="검정"></button>
+        <button class="sw" style="background:#2746C9" data-color="#2746C9" title="파랑"></button>
+        <button class="sw" style="background:#B23A3A" data-color="#B23A3A" title="빨강"></button>
+        <button class="sw" style="background:#1F7A4D" data-color="#1F7A4D" title="초록"></button>
+        <button class="sw" style="background:#FFFFFF" data-color="#FFFFFF" title="흰색"></button>
+        <input type="color" id="textCustom" value="#16161d" title="사용자 지정 색">
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">배경</span>
+      <div class="swatches" id="bgSw">
+        <button class="sw chk" data-bg="transparent" aria-pressed="true" title="투명"></button>
+        <button class="sw" style="background:#FFFFFF" data-bg="#FFFFFF" title="흰색"></button>
+        <button class="sw" style="background:#16161D" data-bg="#16161D" title="검정"></button>
+        <input type="color" id="bgCustom" value="#ffffff" title="사용자 지정 배경">
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">해상도</span>
+      <div class="seg" id="scaleSeg">
+        <button data-scale="1" aria-pressed="false">1×</button>
+        <button data-scale="2" aria-pressed="false">2×</button>
+        <button data-scale="4" aria-pressed="true">4×</button>
+        <button data-scale="8" aria-pressed="false">8×</button>
+      </div>
+    </div>
+
+    <div class="ctrl-row">
+      <span class="ctrl-label">여백</span>
+      <input type="range" id="padRange" min="0" max="64" value="16" style="flex:1; max-width:280px;">
+      <span class="pad-val" id="padVal">16 px</span>
+    </div>
+  </div>
+
+  <!-- 액션 -->
+  <div class="actions">
+    <button class="btn primary" id="copyPng">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      이미지 복사 (PNG)
+    </button>
+    <button class="btn" id="dlPng">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      PNG 저장
+    </button>
+    <button class="btn" id="dlSvg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      SVG 저장
+    </button>
+    <button class="btn" id="copySvg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      SVG 코드 복사
+    </button>
+  </div>
+
+  <div id="diag" style="margin-top:12px; font-family:var(--mono); font-size:12px; color:var(--faint);"></div>
+
+  <div style="margin-top:8px; font-size:12.5px; color:var(--muted);">
+    팁: 위 <b style="color:var(--ink)">명세 미리보기</b>의 수식을 <b style="color:var(--ink)">우클릭 → ‘이미지 복사’</b> 하면
+    권한 제약과 무관하게 ⌘V로 붙여넣을 수 있습니다.
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<!-- 측정 전용(화면 밖) SVG: 내보내기 크기 계산용 -->
+<div id="measureWrap" aria-hidden="true"><div id="preview"></div></div>
+
+<!-- 폴백 복사용 오프스크린 홀더(비동기 클립보드가 차단된 환경에서 execCommand로 이미지 복사) -->
+<div id="copyHolder" contenteditable="true" aria-hidden="true"
+     style="position:fixed; left:-99999px; top:0; pointer-events:none; user-select:text;">
+  <img id="copyImg" alt="">
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---- 상태 ----
+  const state = {
+    mode: "display",
+    multiline: false,
+    textColor: "#16161D",
+    bg: "transparent",
+    scale: 4,
+    pad: 16,
+    ready: false,
+    valid: false
+  };
+
+  const $ = (s) => document.querySelector(s);
+  const src       = $("#src");
+  const preview   = $("#preview");
+  const errBox    = $("#err");
+  const specimen  = $("#specimen");
+  const dimEl     = $("#dim");
+  const scaleNote = $("#scaleNote");
+  const toastEl   = $("#toast");
+  const copyImg   = $("#copyImg");
+  const diagEl    = $("#diag");
+  const specimenImg = $("#specimenImg");
+  const pngSize   = $("#pngSize");
+
+  function setDiag(msg) { diagEl.textContent = msg; }
+
+  // 브라우저 계열 감지 (복사 전략 선택용)
+  const ua = navigator.userAgent;
+  const isChromium = !!window.chrome ||
+    (navigator.userAgentData && Array.isArray(navigator.userAgentData.brands) &&
+     navigator.userAgentData.brands.some((b) => /Chromium|Google Chrome|Microsoft Edge|Opera/i.test(b.brand)));
+  const isSafari = /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(ua);
+  const isFirefox = /firefox|fxios/i.test(ua);
+  const browserLabel = isChromium ? "Chromium" : isSafari ? "Safari" : isFirefox ? "Firefox" : "기타";
+
+  // 시작 시 클립보드 능력 점검 결과 표시
+  function capabilitySummary() {
+    const sec = window.isSecureContext ? "secure✓" : "secure✗";
+    const api = (navigator.clipboard && navigator.clipboard.write) ? "clipboard.write✓" : "clipboard.write✗";
+    const item = window.ClipboardItem ? "ClipboardItem✓" : "ClipboardItem✗";
+    return browserLabel + "  ·  " + [sec, api, item].join("  ·  ");
+  }
+
+  // 미리 생성해 둔 내보내기 결과(클릭 제스처 내에서 즉시 복사하기 위함)
+  const exportCache = { blob: null, dataUrl: null };
+
+  // ---- 빠른 삽입 칩 ----
+  const SNIPPETS = [
+    ["\\frac{ }{ }", "\\frac{a}{b}"],
+    ["x^{ }", "^{}"],
+    ["x_{ }", "_{}"],
+    ["\\sqrt{ }", "\\sqrt{}"],
+    ["\\sum", "\\sum_{i=1}^{N} "],
+    ["\\int", "\\int_{a}^{b} "],
+    ["\\partial", "\\partial "],
+    ["\\nabla", "\\nabla "],
+    ["\\alpha", "\\alpha "],
+    ["\\theta", "\\theta "],
+    ["\\hat{ }", "\\hat{x}"],
+    ["\\mathbf{ }", "\\mathbf{w}"],
+    ["\\\\ 줄바꿈", "\\\\\n", { multiline: true }],
+    ["aligned", "\\begin{aligned}\n  a &= b \\\\\n  c &= d\n\\end{aligned}"],
+    ["\\begin{matrix}", "\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}"]
+  ];
+  const chipsBox = $("#chips");
+  SNIPPETS.forEach(([label, ins, opts]) => {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label;
+    b.addEventListener("click", () => {
+      if (opts && opts.multiline && !state.multiline) setMultiline(true);
+      insertAtCursor(ins);
+    });
+    chipsBox.appendChild(b);
+  });
+
+  function insertAtCursor(text) {
+    src.focus();
+    // execCommand('insertText')는 네이티브 실행취소(undo) 기록을 보존한다.
+    // (textarea.value 직접 대입은 undo 스택을 초기화해 ⌘Z가 듣지 않게 됨)
+    let ok = false;
+    try { ok = document.execCommand("insertText", false, text); } catch (e) { ok = false; }
+    if (!ok) {
+      // 폴백: 수동 삽입 (이 경로에서는 undo가 제한될 수 있음)
+      const s = src.selectionStart, e = src.selectionEnd;
+      src.value = src.value.slice(0, s) + text + src.value.slice(e);
+      const caret = s + text.length;
+      src.setSelectionRange(caret, caret);
+    }
+    scheduleRender();
+  }
+
+  // ---- 토스트 ----
+  let toastTimer;
+  function toast(msg, danger) {
+    toastEl.textContent = msg;
+    toastEl.classList.toggle("danger", !!danger);
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 2200);
+  }
+
+  // ---- 렌더링 ----
+  let renderTimer;
+  function scheduleRender() {
+    clearTimeout(renderTimer);
+    renderTimer = setTimeout(render, 160);
+  }
+
+  async function render() {
+    if (!state.ready) return;
+    const tex = src.value.trim();
+    if (!tex) {
+      preview.innerHTML = "";
+      state.valid = false;
+      specimenImg.removeAttribute("src");
+      specimenImg.style.display = "none";
+      errBox.style.display = "none";
+      exportCache.blob = null; exportCache.dataUrl = null;
+      pngSize.textContent = "";
+      dimEl.textContent = "—";
+      return;
+    }
+    try {
+      // 여러 줄 모드: \displaylines로 감싸 \\가 줄바꿈으로 동작하게 함(디스플레이 강제)
+      const input = state.multiline ? ("\\displaylines{" + tex + "}") : tex;
+      const useDisplay = state.multiline ? true : (state.mode === "display");
+      const node = await MathJax.tex2svgPromise(input, { display: useDisplay });
+      const svg = node.querySelector("svg");
+      const errNode = node.querySelector('[data-mml-node="merror"], [data-mjx-error]');
+      if (errNode) {
+        const msg = errNode.getAttribute("data-mjx-error") ||
+                    (errNode.textContent || "").trim() || "수식 구문 오류";
+        showError(msg);
+        state.valid = false;
+      } else {
+        preview.innerHTML = "";
+        svg.style.color = state.textColor;
+        preview.appendChild(svg);
+        showError(null);
+        state.valid = true;
+      }
+    } catch (e) {
+      showError(String(e && e.message ? e.message : e));
+      state.valid = false;
+    }
+    updateMeta();
+    scheduleRegen();
+  }
+
+  function showError(msg) {
+    if (msg) {
+      specimenImg.style.display = "none";
+      errBox.style.display = "block";
+      errBox.textContent = "⚠ " + msg;
+    } else {
+      // PNG가 준비돼 있으면 표시(준비 전이면 regenExport가 채운다)
+      specimenImg.style.display = specimenImg.getAttribute("src") ? "inline-block" : "none";
+      errBox.style.display = "none";
+    }
+  }
+
+  // 현재 미리보기 SVG의 픽셀 크기(여백 제외)
+  function svgPixelSize() {
+    const svg = preview.querySelector("svg");
+    if (!svg) return null;
+    const r = svg.getBoundingClientRect();
+    return { w: r.width, h: r.height, svg };
+  }
+
+  function updateMeta() {
+    scaleNote.textContent = "배율 " + state.scale + "×";
+    const size = state.valid && svgPixelSize();
+    if (!size) { dimEl.textContent = "—"; return; }
+    const W = Math.ceil((size.w + state.pad * 2) * state.scale);
+    const H = Math.ceil((size.h + state.pad * 2) * state.scale);
+    dimEl.textContent = W + " × " + H + " px";
+  }
+
+  // ---- 내보내기 ----
+  function buildExportSVG() {
+    const size = svgPixelSize();
+    if (!size) return null;
+    const clone = size.svg.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("width", size.w);
+    clone.setAttribute("height", size.h);
+    clone.style.color = state.textColor; // path는 currentColor 사용
+    return { node: clone, w: size.w, h: size.h };
+  }
+
+  function svgString() {
+    const ex = buildExportSVG();
+    if (!ex) return null;
+    return new XMLSerializer().serializeToString(ex.node);
+  }
+
+  function renderCanvas() {
+    return new Promise((resolve, reject) => {
+      const ex = buildExportSVG();
+      if (!ex) return reject(new Error("렌더링된 수식이 없습니다"));
+      const scale = state.scale, pad = state.pad;
+      const W = Math.ceil((ex.w + pad * 2) * scale);
+      const H = Math.ceil((ex.h + pad * 2) * scale);
+      const str = new XMLSerializer().serializeToString(ex.node);
+      const url = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(str)));
+      const img = new Image();
+      img.onload = () => {
+        const c = document.createElement("canvas");
+        c.width = W; c.height = H;
+        const ctx = c.getContext("2d");
+        if (state.bg !== "transparent") { ctx.fillStyle = state.bg; ctx.fillRect(0, 0, W, H); }
+        ctx.drawImage(img, pad * scale, pad * scale, ex.w * scale, ex.h * scale);
+        resolve(c);
+      };
+      img.onerror = () => reject(new Error("SVG 변환에 실패했습니다"));
+      img.src = url;
+    });
+  }
+
+  function canvasBlob(canvas) {
+    return new Promise((res, rej) =>
+      canvas.toBlob((b) => (b ? res(b) : rej(new Error("PNG 생성 실패"))), "image/png")
+    );
+  }
+
+  function guardValid() {
+    if (!state.valid) { toast("먼저 올바른 수식을 입력해 주세요", true); return false; }
+    return true;
+  }
+
+  // 옵션/수식이 바뀔 때마다 PNG를 미리 만들어 캐시 (복사 클릭 시 동기적으로 사용)
+  let regenTimer;
+  function scheduleRegen() { clearTimeout(regenTimer); regenTimer = setTimeout(regenExport, 150); }
+  async function regenExport() {
+    if (!state.valid) {
+      exportCache.blob = null; exportCache.dataUrl = null;
+      copyImg.removeAttribute("src");
+      specimenImg.removeAttribute("src");
+      specimenImg.style.display = "none";
+      pngSize.textContent = "";
+      return;
+    }
+    try {
+      const canvas = await renderCanvas();
+      exportCache.dataUrl = canvas.toDataURL("image/png");
+      copyImg.src = exportCache.dataUrl;          // execCommand 폴백용
+      specimenImg.src = exportCache.dataUrl;      // 명세 미리보기 = 우클릭 복사 가능한 PNG
+      if (errBox.style.display !== "block") specimenImg.style.display = "inline-block";
+      exportCache.blob = await canvasBlob(canvas);
+      pngSize.textContent = (exportCache.blob.size / 1024).toFixed(1) +
+                            " KB · " + canvas.width + "×" + canvas.height + " px";
+    } catch (e) {
+      exportCache.blob = null; exportCache.dataUrl = null;
+      pngSize.textContent = "이미지 생성 실패: " + (e && e.message ? e.message : e);
+    }
+  }
+
+  // execCommand 폴백 — 비동기 클립보드가 막힌 환경에서 이미지를 복사
+  function fallbackCopyImage() {
+    if (!copyImg.getAttribute("src")) return false;
+    if (!copyImg.complete || copyImg.naturalWidth === 0) return false; // 아직 로드 전
+    try {
+      const sel = window.getSelection();
+      const range = document.createRange();
+      range.selectNode(copyImg);
+      sel.removeAllRanges();
+      sel.addRange(range);
+      const ok = document.execCommand("copy");
+      sel.removeAllRanges();
+      return ok;
+    } catch (e) { return false; }
+  }
+
+  // PNG 복사 — OS/브라우저별 차이를 흡수하는 다단계 전략
+  //  · Chromium: execCommand가 임베드 프레임에서도 잘 됨 → 먼저 시도
+  //  · Safari/Firefox: execCommand 이미지 복사가 불안정 → 표준 ClipboardItem(비동기) 사용
+  //  · 미리 만든 Blob을 동기적으로 write 하여 클릭 제스처 유지(모든 브라우저 공통)
+  function copySuccess(via) {
+    toast("이미지를 클립보드에 복사했습니다");
+    setDiag("복사 성공 (" + via + ")  ·  " + capabilitySummary());
+  }
+  function copyFail(reason) {
+    toast("이 화면에서는 복사가 차단되었습니다 — 'PNG 저장'을 사용해 주세요", true);
+    setDiag("복사 실패: " + reason + "  ·  " + capabilitySummary() +
+            "  → 파일을 브라우저 탭에서 직접 열면 복사됩니다");
+  }
+
+  function tryAsyncClipboard(onFail) {
+    if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
+      onFail("ClipboardAPI 없음"); return;
+    }
+    // 캐시된 Blob이 있으면 그대로(동기 write), 없으면 Promise<Blob>로 제스처 유지
+    const data = exportCache.blob
+      ? exportCache.blob
+      : renderCanvas().then(canvasBlob);
+    let item;
+    try { item = new ClipboardItem({ "image/png": data }); }
+    catch (e) { onFail(e && e.name ? e.name : "ClipboardItem 생성 실패"); return; }
+    navigator.clipboard.write([item])
+      .then(() => copySuccess("Clipboard API"))
+      .catch((e) => onFail(e && e.name ? e.name : "write 거부"));
+  }
+
+  $("#copyPng").addEventListener("click", () => {
+    if (!guardValid()) return;
+
+    // 표준 비동기 Clipboard API만 '성공'으로 인정 (실제 PNG 보장)
+    // 차단되면 거짓 성공을 내지 않고, 우클릭 '이미지 복사'로 안내
+    tryAsyncClipboard((reason) => {
+      toast("자동 복사가 차단됨 — 미리보기의 수식을 우클릭해 복사하세요", true);
+      setDiag("자동 복사 불가: " + reason + "  ·  " + capabilitySummary() +
+              "  → 명세 미리보기 우클릭 → ‘이미지 복사’ 후 ⌘V");
+      const panel = specimen.closest(".panel");
+      if (panel) {
+        panel.scrollIntoView({ behavior: "smooth", block: "center" });
+        panel.style.outline = "2px solid var(--accent)";
+        panel.style.outlineOffset = "3px";
+        setTimeout(() => { panel.style.outline = ""; panel.style.outlineOffset = ""; }, 1800);
+      }
+    });
+  });
+
+  $("#dlPng").addEventListener("click", async () => {
+    if (!guardValid()) return;
+    try {
+      const blob = exportCache.blob || await renderCanvas().then(canvasBlob);
+      downloadBlob(blob, "equation.png");
+    } catch (e) { toast(String(e.message || e), true); }
+  });
+
+  $("#dlSvg").addEventListener("click", () => {
+    if (!guardValid()) return;
+    const str = svgString();
+    if (!str) return;
+    downloadBlob(new Blob([str], { type: "image/svg+xml" }), "equation.svg");
+  });
+
+  $("#copySvg").addEventListener("click", async () => {
+    if (!guardValid()) return;
+    const str = svgString();
+    if (!str) return;
+    try {
+      await navigator.clipboard.writeText(str);
+      toast("SVG 코드를 복사했습니다");
+    } catch (e) { toast("복사 실패", true); }
+  });
+
+  function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  // ---- 컨트롤 바인딩 ----
+  function bindSeg(segId, key, cast, after) {
+    const seg = $(segId);
+    seg.addEventListener("click", (e) => {
+      const btn = e.target.closest("button");
+      if (!btn) return;
+      [...seg.children].forEach((b) => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+      state[key] = cast(btn.dataset[Object.keys(btn.dataset)[0]]);
+      if (after) after();
+    });
+  }
+  bindSeg("#modeSeg", "mode", (v) => v, render);
+  bindSeg("#scaleSeg", "scale", Number, () => { updateMeta(); scheduleRegen(); });
+
+  // 여러 줄 토글 (켜면 \displaylines로 감싸 \\ 줄바꿈 적용)
+  function setMultiline(on) {
+    state.multiline = on;
+    const seg = document.getElementById("multiSeg");
+    [...seg.children].forEach((b) =>
+      b.setAttribute("aria-pressed", b.dataset.multi === (on ? "on" : "off") ? "true" : "false"));
+    render();
+  }
+  document.getElementById("multiSeg").addEventListener("click", (e) => {
+    const b = e.target.closest("button");
+    if (b) setMultiline(b.dataset.multi === "on");
+  });
+
+  // 글자 색 스와치
+  const textSw = $("#textSw");
+  textSw.addEventListener("click", (e) => {
+    const b = e.target.closest("button.sw");
+    if (!b) return;
+    textSw.querySelectorAll(".sw").forEach((s) => s.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    state.textColor = b.dataset.color;
+    applyTextColor();
+  });
+  $("#textCustom").addEventListener("input", (e) => {
+    textSw.querySelectorAll(".sw").forEach((s) => s.setAttribute("aria-pressed", "false"));
+    state.textColor = e.target.value;
+    applyTextColor();
+  });
+  function applyTextColor() {
+    const svg = preview.querySelector("svg");
+    if (svg) svg.style.color = state.textColor;
+    scheduleRegen();
+  }
+
+  // 배경 스와치
+  const bgSw = $("#bgSw");
+  bgSw.addEventListener("click", (e) => {
+    const b = e.target.closest("button.sw");
+    if (!b) return;
+    bgSw.querySelectorAll(".sw").forEach((s) => s.setAttribute("aria-pressed", "false"));
+    b.setAttribute("aria-pressed", "true");
+    state.bg = b.dataset.bg;
+    applyBg();
+  });
+  $("#bgCustom").addEventListener("input", (e) => {
+    bgSw.querySelectorAll(".sw").forEach((s) => s.setAttribute("aria-pressed", "false"));
+    state.bg = e.target.value;
+    applyBg();
+  });
+  function applyBg() {
+    specimen.classList.toggle("bg-transparent", state.bg === "transparent");
+    specimen.style.background = state.bg === "transparent" ? "" : state.bg;
+    scheduleRegen();
+  }
+
+  // 여백
+  const padRange = $("#padRange"), padVal = $("#padVal");
+  padRange.addEventListener("input", () => {
+    state.pad = Number(padRange.value);
+    padVal.textContent = state.pad + " px";
+    updateMeta();
+    scheduleRegen();
+  });
+
+  // 입력
+  src.addEventListener("input", scheduleRender);
+
+  // ---- 시작 ----
+  setDiag(capabilitySummary());
+  if (window.MathJax && MathJax.startup && MathJax.startup.promise) {
+    MathJax.startup.promise.then(() => { state.ready = true; render(); });
+  } else {
+    document.getElementById("mjx").addEventListener("load", () => {
+      MathJax.startup.promise.then(() => { state.ready = true; render(); });
+    });
+  }
+})();
+</script>
+</body>
+</html>
