@@ -243,8 +243,14 @@
     </div>
     <div class="ctrl-row">
       <span class="ctrl-label">해상도</span>
-      <input type="range" id="dpi" min="72" max="400" step="1" value="150" style="flex:1; max-width:320px;">
+      <div class="seg" id="dpiSeg">
+        <button data-dpi="72" aria-pressed="false">72</button>
+        <button data-dpi="150" aria-pressed="true">150</button>
+        <button data-dpi="300" aria-pressed="false">300</button>
+        <button data-dpi="400" aria-pressed="false">400</button>
+      </div>
       <span class="res-val" id="dpiVal">—</span>
+      <span class="hint">DPI · 숫자가 클수록 선명하고 용량이 큽니다</span>
     </div>
   </div>
 
@@ -314,7 +320,7 @@
   const statusEl = $("#status");
   const progress = $("#progress");
   const barEl    = $("#bar");
-  const dpiEl    = $("#dpi");
+  const dpiSeg   = $("#dpiSeg");
   const dpiVal   = $("#dpiVal");
   const fmtSeg   = $("#fmtSeg");
   const fnameEl  = $("#fname");
@@ -357,9 +363,11 @@
   }
 
   // ---- 해상도 표시 ----
+  const DPI_NOTE = { 72: "화면용", 150: "기본", 300: "인쇄용", 400: "최대" };
   function updateDpiLabel() {
     const scale = dpiToScale(state.dpi);
-    dpiVal.innerHTML = "<b>" + state.dpi + " DPI</b> · 배율 " + scale.toFixed(2) + "×";
+    const note = DPI_NOTE[state.dpi] ? " · " + DPI_NOTE[state.dpi] : "";
+    dpiVal.innerHTML = "<b>" + state.dpi + " DPI</b> · 배율 " + scale.toFixed(2) + "×" + note;
     // 각 페이지 카드의 출력 크기 라벨 갱신
     for (let n = 1; n <= pageCount; n++) {
       const el = document.getElementById("psize-" + n);
@@ -578,8 +586,11 @@
     state.format = btn.dataset.fmt;
   });
 
-  dpiEl.addEventListener("input", () => {
-    state.dpi = Number(dpiEl.value);
+  dpiSeg.addEventListener("click", (e) => {
+    const btn = e.target.closest("button");
+    if (!btn) return;
+    [...dpiSeg.children].forEach((b) => b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+    state.dpi = Number(btn.dataset.dpi);
     updateDpiLabel();
   });
 
