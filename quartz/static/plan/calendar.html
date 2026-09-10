@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plan — 주간·월간 계획 캘린더</title>
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --panel2:#f2f4f8; --text:#15171c; --muted:#6b7280;
+  --line:#e2e6ee; --line2:#eef1f6; --accent:#2f6fed; --danger:#dc3f36; --warn:#e08a1e; --warn-bg:rgba(224,138,30,.12);
+  --shadow:0 1px 2px rgba(16,20,30,.05), 0 10px 30px rgba(16,20,30,.06);
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1014; --panel:#161a21; --panel2:#1c212a; --text:#e7eaf0; --muted:#9aa3b2;
+    --line:#262c37; --line2:#1f242d; --accent:#6b9bff; --danger:#ff6b60; --warn:#f0a93c; --warn-bg:rgba(240,169,60,.16);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1014; --panel:#161a21; --panel2:#1c212a; --text:#e7eaf0; --muted:#9aa3b2;
+  --line:#262c37; --line2:#1f242d; --accent:#6b9bff; --danger:#ff6b60; --warn:#f0a93c; --warn-bg:rgba(240,169,60,.16);
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",system-ui,sans-serif;
+  font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased; font-feature-settings:"tnum";
+}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+.wrap{max-width:1100px;margin:0 auto;padding:22px 16px 60px}
+
+/* ---------- header ---------- */
+.top{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin-bottom:12px}
+.nav{display:flex;align-items:center;gap:4px}
+.title{font-size:clamp(20px,3vw,26px);font-weight:800;letter-spacing:-.02em;margin:0 8px;min-width:8.5em}
+.btn{
+  border:1px solid var(--line);background:var(--panel);color:var(--muted);
+  border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer;transition:.15s;white-space:nowrap;line-height:1.3
+}
+.btn:hover{color:var(--text);border-color:var(--muted)}
+.btn.icon{padding:6px 10px;font-size:14px}
+.btn[aria-pressed="true"]{background:var(--text);color:var(--bg);border-color:var(--text);font-weight:600}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden;background:var(--panel)}
+.seg .btn{border:0;border-radius:0}
+.spacer{flex:1}
+.tools{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.badge{
+  font-size:12px;font-weight:700;color:var(--warn);background:var(--warn-bg);
+  border-radius:999px;padding:5px 11px;white-space:nowrap
+}
+.badge[hidden]{display:none}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center}
+.legend .btn{display:inline-flex;align-items:center;gap:6px}
+.legend .btn i{display:inline-block;width:9px;height:9px;border-radius:3px;background:var(--c)}
+.legend .btn[aria-pressed="false"]{opacity:.45}
+.notice{
+  font-size:12.5px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);
+  border-radius:9px;padding:8px 12px;margin-bottom:12px
+}
+.notice[hidden]{display:none}
+
+/* ---------- month grid ---------- */
+.cal{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:1px solid var(--line)}
+.dow div{padding:9px 6px;text-align:center;font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.02em}
+.dow div:nth-child(6){color:var(--accent)} .dow div:nth-child(7){color:var(--danger)}
+.days{display:grid;grid-template-columns:repeat(7,1fr)}
+.day{
+  min-height:112px;border-right:1px solid var(--line2);border-bottom:1px solid var(--line2);
+  padding:6px 6px 8px;position:relative;cursor:pointer;transition:background .12s
+}
+.day:nth-child(7n){border-right:0}
+.day:hover{background:var(--panel2)}
+.day.dim{opacity:.38}
+.dnum{font-size:12.5px;font-weight:700;display:inline-block;margin-bottom:4px;padding:1px 6px;border-radius:7px}
+.day.sat .dnum{color:var(--accent)} .day.sun .dnum{color:var(--danger)}
+.day.today .dnum{background:var(--text);color:var(--bg)}
+
+/* ---------- items ---------- */
+.item{
+  display:flex;align-items:center;gap:5px;font-size:11.5px;line-height:1.3;padding:3px 5px;border-radius:5px;margin-bottom:3px;
+  background:color-mix(in srgb, var(--c) 12%, transparent);color:var(--c);font-weight:600;cursor:pointer;
+  position:relative
+}
+.item .dot{width:7px;height:7px;border-radius:50%;background:var(--c);flex:0 0 auto}
+.item .txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.item.done{opacity:.5}
+.item.done .txt{text-decoration:line-through}
+.item .x{
+  flex:0 0 auto;border:0;background:none;color:inherit;opacity:0;cursor:pointer;padding:0 2px;font-size:12px;line-height:1
+}
+.item:hover .x{opacity:.8}
+.item .edit{flex:1;min-width:0;border:0;background:var(--panel);color:var(--text);border-radius:4px;padding:1px 4px;font-size:11.5px;font-weight:600}
+
+/* ---------- inline add ---------- */
+.adder{display:flex;gap:4px;margin-top:3px}
+.adder input{flex:1;min-width:0;border:1px solid var(--line);border-radius:6px;padding:4px 6px;font-size:11.5px;background:var(--panel)}
+.adder select{border:1px solid var(--line);border-radius:6px;padding:0 4px;font-size:11px;background:var(--panel);max-width:64px}
+.adder input:focus,.adder select:focus,.item .edit:focus{outline:2px solid var(--accent);outline-offset:0}
+.addhint{
+  position:absolute;right:6px;top:6px;font-size:14px;color:var(--muted);opacity:0;line-height:1;pointer-events:none
+}
+.day:hover .addhint,.wrow:hover .addhint{opacity:.6}
+
+/* ---------- week view ---------- */
+.week{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.wrow{display:grid;grid-template-columns:120px 1fr;gap:14px;padding:14px 18px;border-bottom:1px solid var(--line2);position:relative;cursor:pointer}
+.wrow:last-child{border-bottom:0}
+.wrow:hover{background:var(--panel2)}
+.wrow.today{box-shadow:inset 3px 0 0 var(--text)}
+.wdate{font-size:14px;font-weight:800;letter-spacing:-.01em}
+.wdate small{display:block;font-weight:600;font-size:11.5px;color:var(--muted);margin-top:2px}
+.wrow.sat .wdate{color:var(--accent)} .wrow.sun .wdate{color:var(--danger)}
+.wrow .item{font-size:13.5px;padding:5px 8px;margin-bottom:5px}
+.wrow .item .edit{font-size:13.5px}
+.wrow .adder input{font-size:13px;padding:6px 8px}
+.wrow .adder select{font-size:12px;max-width:90px}
+.wempty{color:var(--muted);font-size:12.5px}
+@media (max-width:600px){
+  .wrow{grid-template-columns:1fr;gap:6px}
+  .day{min-height:84px;padding:4px}
+  .item{font-size:10.5px;padding:2px 4px}
+  .title{min-width:0}
+}
+.foot{color:var(--muted);font-size:12px;margin-top:14px;line-height:1.6}
+.foot code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <div class="nav">
+      <button class="btn icon" id="prev" title="이전">‹</button>
+      <h1 class="title" id="title"></h1>
+      <button class="btn icon" id="next" title="다음">›</button>
+      <button class="btn" id="today">오늘</button>
+    </div>
+    <div class="seg" role="group" aria-label="보기">
+      <button class="btn" id="vMonth" aria-pressed="true">월간</button>
+      <button class="btn" id="vWeek" aria-pressed="false">주간</button>
+    </div>
+    <div class="spacer"></div>
+    <div class="tools">
+      <span class="badge" id="badge" hidden></span>
+      <button class="btn" id="export" title="현재 계획을 plan.json 파일로 다운로드">JSON 내보내기</button>
+      <button class="btn" id="import" title="JSON 파일에서 불러오기">가져오기</button>
+      <button class="btn" id="reset" title="브라우저 변경을 버리고 리포지토리 버전으로">되돌리기</button>
+      <input type="file" id="file" accept="application/json,.json" hidden>
+    </div>
+  </div>
+  <div class="legend" id="legend"></div>
+  <div class="notice" id="notice" hidden></div>
+  <div id="view"></div>
+  <p class="foot">
+    빈 칸을 클릭하면 항목을 추가합니다. 항목 클릭 = 완료 토글, 더블클릭 = 제목 수정, × = 삭제.
+    브라우저 변경은 이 브라우저에만 저장됩니다. 블로그에 반영하려면 <b>JSON 내보내기</b> → <code>quartz/static/plan/plan.json</code> 교체 → push.
+  </p>
+</div>
+
+<script>
+(() => {
+'use strict';
+/* ===================== data layer ===================== */
+const LS_DATA = 'plan.v1', LS_UI = 'plan.ui';
+const DEFAULT_COLOR = '#8a919e';
+
+const isDate = s => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + 'T00:00:00').getTime());
+const rid = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-3);
+
+function validate(obj) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (!Array.isArray(obj.categories) || !Array.isArray(obj.items)) return null;
+  const categories = [];
+  for (const c of obj.categories) {
+    if (!c || typeof c.id !== 'string' || !c.id || typeof c.name !== 'string') return null;
+    categories.push({ id: c.id, name: c.name, color: typeof c.color === 'string' ? c.color : DEFAULT_COLOR });
+  }
+  const items = [];
+  for (const it of obj.items) {
+    if (!it || !isDate(it.date) || typeof it.title !== 'string') return null;
+    items.push({
+      id: typeof it.id === 'string' && it.id ? it.id : rid(),
+      date: it.date, title: it.title,
+      cat: typeof it.cat === 'string' ? it.cat : '',
+      done: !!it.done
+    });
+  }
+  return { categories, items };
+}
+
+let storageOk = true;
+function lsGet(k) { try { return localStorage.getItem(k); } catch { storageOk = false; return null; } }
+function lsSet(k, v) { try { localStorage.setItem(k, v); } catch { storageOk = false; } }
+function lsDel(k) { try { localStorage.removeItem(k); } catch { storageOk = false; } }
+
+async function loadRepo() {
+  try {
+    const r = await fetch('plan.json', { cache: 'no-store' });
+    if (!r.ok) return null;
+    return validate(await r.json());
+  } catch { return null; }
+}
+function loadLocal() {
+  const raw = lsGet(LS_DATA);
+  if (!raw) return null;
+  try { return validate(JSON.parse(raw)); } catch { return null; }
+}
+function saveLocal(d) { lsSet(LS_DATA, JSON.stringify(d)); }
+function clearLocal() { lsDel(LS_DATA); }
+
+const itemKey = it => `${it.date} ${it.title} ${it.cat} ${it.done ? 1 : 0}`;
+function diffCount(repo, local) {
+  if (!repo) return local ? local.items.length : 0;
+  if (!local) return 0;
+  const a = new Map(repo.items.map(i => [i.id, itemKey(i)]));
+  const b = new Map(local.items.map(i => [i.id, itemKey(i)]));
+  let n = 0;
+  for (const [id, k] of b) if (!a.has(id) || a.get(id) !== k) n++;   // added or modified
+  for (const id of a.keys()) if (!b.has(id)) n++;                    // removed
+  return n;
+}
+
+/* ===================== date helpers ===================== */
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parse = s => new Date(s + 'T00:00:00');
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const startOfWeek = d => addDays(d, -((d.getDay() + 6) % 7)); // Monday
+const DOW = ['월', '화', '수', '목', '금', '토', '일'];
+const todayStr = () => ymd(new Date());
+
+/* ===================== state ===================== */
+let repo = null, data = { categories: [], items: [] };
+const state = { view: 'month', cursor: ymd(new Date()), filter: null }; // filter: null = all, else Set of cat ids
+let editingAdd = null;   // date string where adder is open
+let editingItem = null;  // item id being renamed
+
+function loadUI() {
+  try {
+    const u = JSON.parse(lsGet(LS_UI) || '{}');
+    if (u.view === 'week' || u.view === 'month') state.view = u.view;
+    if (isDate(u.cursor)) state.cursor = u.cursor;
+    if (Array.isArray(u.filter)) state.filter = new Set(u.filter);
+  } catch {}
+}
+function saveUI() {
+  lsSet(LS_UI, JSON.stringify({ view: state.view, cursor: state.cursor, filter: state.filter ? [...state.filter] : null }));
+}
+
+/* ===================== mutations ===================== */
+function commit() { saveLocal(data); render(); }
+function addItem(date, title, cat) {
+  title = title.trim(); if (!title) return;
+  data.items.push({ id: rid(), date, title, cat, done: false });
+  data.items.sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  commit();
+}
+function toggleDone(id) { const it = data.items.find(i => i.id === id); if (it) { it.done = !it.done; commit(); } }
+function removeItem(id) { data.items = data.items.filter(i => i.id !== id); commit(); }
+function renameItem(id, title) { title = title.trim(); const it = data.items.find(i => i.id === id); if (it && title) { it.title = title; } commit(); }
+
+/* ===================== rendering ===================== */
+const $ = id => document.getElementById(id);
+const catMap = () => new Map(data.categories.map(c => [c.id, c]));
+const catColor = (m, id) => (m.get(id) || {}).color || DEFAULT_COLOR;
+const visible = it => !state.filter || state.filter.has(it.cat);
+const itemsOn = date => data.items.filter(i => i.date === date && visible(i));
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') e.className = v;
+    else if (k === 'style') e.style.cssText = v;
+    else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined) e.setAttribute(k, v);
+  }
+  for (const k of kids) e.append(k);
+  return e;
+}
+
+function renderItem(it, m) {
+  const color = catColor(m, it.cat);
+  if (editingItem === it.id) {
+    const input = el('input', { class: 'edit', value: it.title });
+    const finish = save => { editingItem = null; save ? renameItem(it.id, input.value) : render(); };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') finish(true); if (e.key === 'Escape') finish(false); });
+    input.addEventListener('blur', () => finish(true));
+    const wrap = el('div', { class: 'item', style: `--c:${color}` }, el('span', { class: 'dot' }), input);
+    setTimeout(() => { input.focus(); input.select(); }, 0);
+    return wrap;
+  }
+  const x = el('button', { class: 'x', title: '삭제', onclick: e => { e.stopPropagation(); removeItem(it.id); } }, '×');
+  const node = el('div', {
+    class: 'item' + (it.done ? ' done' : ''), style: `--c:${color}`, title: (m.get(it.cat) || {}).name || '',
+    onclick: e => { e.stopPropagation(); toggleDone(it.id); },
+    ondblclick: e => { e.stopPropagation(); editingItem = it.id; editingAdd = null; render(); }
+  }, el('span', { class: 'dot' }), el('span', { class: 'txt' }, it.title), x);
+  return node;
+}
+
+function renderAdder(date) {
+  const input = el('input', { placeholder: '항목 입력 후 Enter', 'aria-label': '새 항목' });
+  const sel = el('select', { 'aria-label': '카테고리' });
+  for (const c of data.categories) sel.append(el('option', { value: c.id }, c.name));
+  if (!data.categories.length) sel.append(el('option', { value: '' }, '없음'));
+  const lastCat = lsGet('plan.lastcat'); if (lastCat && data.categories.some(c => c.id === lastCat)) sel.value = lastCat;
+  const close = () => { editingAdd = null; render(); };
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { lsSet('plan.lastcat', sel.value); editingAdd = null; addItem(date, input.value, sel.value); }
+    if (e.key === 'Escape') close();
+  });
+  let inside = false;
+  const box = el('div', { class: 'adder', onclick: e => e.stopPropagation(), ondblclick: e => e.stopPropagation() }, input, sel);
+  box.addEventListener('focusout', e => { if (!box.contains(e.relatedTarget)) { setTimeout(() => { if (!box.contains(document.activeElement)) close(); }, 0); } });
+  setTimeout(() => input.focus(), 0);
+  return box;
+}
+
+function cellItems(date, m) {
+  const frag = document.createDocumentFragment();
+  for (const it of itemsOn(date)) frag.append(renderItem(it, m));
+  if (editingAdd === date) frag.append(renderAdder(date));
+  return frag;
+}
+function openAdder(date) { editingAdd = date; editingItem = null; render(); }
+
+function renderMonth(view, m) {
+  const cur = parse(state.cursor);
+  const y = cur.getFullYear(), mo = cur.getMonth();
+  $('title').textContent = `${y}년 ${mo + 1}월`;
+  const first = new Date(y, mo, 1);
+  let d = startOfWeek(first);
+  const today = todayStr();
+  const cal = el('div', { class: 'cal' });
+  const dow = el('div', { class: 'dow' }); DOW.forEach(n => dow.append(el('div', {}, n))); cal.append(dow);
+  const days = el('div', { class: 'days' });
+  const totalCells = Math.ceil((((first.getDay() + 6) % 7) + new Date(y, mo + 1, 0).getDate()) / 7) * 7;
+  for (let i = 0; i < totalCells; i++, d = addDays(d, 1)) {
+    const ds = ymd(d), dow7 = d.getDay();
+    const cls = ['day', d.getMonth() !== mo ? 'dim' : '', ds === today ? 'today' : '', dow7 === 6 ? 'sat' : '', dow7 === 0 ? 'sun' : ''].filter(Boolean).join(' ');
+    const cell = el('div', { class: cls, onclick: () => openAdder(ds) },
+      el('span', { class: 'dnum' }, String(d.getDate())), el('span', { class: 'addhint' }, '+'), cellItems(ds, m));
+    days.append(cell);
+  }
+  cal.append(days); view.append(cal);
+}
+
+function renderWeek(view, m) {
+  const start = startOfWeek(parse(state.cursor)), end = addDays(start, 6);
+  const sameMonth = start.getMonth() === end.getMonth();
+  $('title').textContent = sameMonth
+    ? `${start.getFullYear()}년 ${start.getMonth() + 1}월 ${start.getDate()}–${end.getDate()}일`
+    : `${start.getMonth() + 1}월 ${start.getDate()}일 – ${end.getMonth() + 1}월 ${end.getDate()}일`;
+  const today = todayStr();
+  const week = el('div', { class: 'week' });
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(start, i), ds = ymd(d), dow7 = d.getDay();
+    const cls = ['wrow', ds === today ? 'today' : '', dow7 === 6 ? 'sat' : '', dow7 === 0 ? 'sun' : ''].filter(Boolean).join(' ');
+    const list = el('div', {});
+    const its = itemsOn(ds);
+    if (!its.length && editingAdd !== ds) list.append(el('span', { class: 'wempty' }, '비어 있음 — 클릭해서 추가'));
+    list.append(cellItems(ds, m));
+    week.append(el('div', { class: cls, onclick: () => openAdder(ds) },
+      el('div', { class: 'wdate' }, `${d.getMonth() + 1}.${d.getDate()} ${DOW[i]}`, el('small', {}, ds === today ? '오늘' : '')),
+      list, el('span', { class: 'addhint' }, '+')));
+  }
+  view.append(week);
+}
+
+function renderLegend() {
+  const lg = $('legend'); lg.replaceChildren();
+  for (const c of data.categories) {
+    const on = !state.filter || state.filter.has(c.id);
+    lg.append(el('button', { class: 'btn', style: `--c:${c.color}`, 'aria-pressed': String(on), onclick: () => {
+      if (!state.filter) state.filter = new Set(data.categories.map(x => x.id));
+      state.filter.has(c.id) ? state.filter.delete(c.id) : state.filter.add(c.id);
+      if (state.filter.size === data.categories.length) state.filter = null;
+      saveUI(); render();
+    } }, el('i'), c.name));
+  }
+  if (data.categories.length && state.filter) {
+    lg.append(el('button', { class: 'btn', onclick: () => { state.filter = null; saveUI(); render(); } }, '전체 보기'));
+  }
+}
+
+function renderBadge() {
+  const n = diffCount(repo, loadLocal());
+  const b = $('badge');
+  b.hidden = n === 0;
+  b.textContent = `미반영 변경 ${n}건`;
+}
+
+function render() {
+  const m = catMap();
+  const view = $('view'); view.replaceChildren();
+  $('vMonth').setAttribute('aria-pressed', String(state.view === 'month'));
+  $('vWeek').setAttribute('aria-pressed', String(state.view === 'week'));
+  state.view === 'week' ? renderWeek(view, m) : renderMonth(view, m);
+  renderLegend(); renderBadge(); saveUI();
+}
+
+/* ===================== controls ===================== */
+function move(n) {
+  const d = parse(state.cursor);
+  if (state.view === 'week') state.cursor = ymd(addDays(d, 7 * n));
+  else { d.setDate(1); d.setMonth(d.getMonth() + n); state.cursor = ymd(d); }
+  editingAdd = null; render();
+}
+$('prev').onclick = () => move(-1);
+$('next').onclick = () => move(1);
+$('today').onclick = () => { state.cursor = todayStr(); editingAdd = null; render(); };
+$('vMonth').onclick = () => { state.view = 'month'; editingAdd = null; render(); };
+$('vWeek').onclick = () => { state.view = 'week'; editingAdd = null; render(); };
+
+$('export').onclick = () => {
+  const blob = new Blob([JSON.stringify(data, null, 2) + '\n'], { type: 'application/json' });
+  const a = el('a', { href: URL.createObjectURL(blob), download: 'plan.json' });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
+$('import').onclick = () => $('file').click();
+$('file').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  try {
+    const v = validate(JSON.parse(await f.text()));
+    if (!v) throw new Error('bad');
+    data = v; commit(); notice('JSON을 가져왔습니다. 이 브라우저에만 저장되었습니다.');
+  } catch { notice('가져오기 실패: categories/items 형식이 맞지 않습니다.'); }
+};
+$('reset').onclick = () => {
+  if (!confirm('이 브라우저의 변경 사항을 모두 버리고 리포지토리(plan.json) 버전으로 되돌릴까요?')) return;
+  clearLocal();
+  data = repo ? structuredClone(repo) : { categories: [], items: [] };
+  editingAdd = editingItem = null; render();
+};
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,select')) return;
+  if (e.key === 'ArrowLeft') move(-1);
+  if (e.key === 'ArrowRight') move(1);
+});
+
+function notice(msg) { const n = $('notice'); n.textContent = msg; n.hidden = !msg; }
+
+/* ===================== boot ===================== */
+(async () => {
+  loadUI();
+  repo = await loadRepo();
+  const local = loadLocal();
+  data = local ? local : (repo ? structuredClone(repo) : { categories: [], items: [] });
+  const msgs = [];
+  if (!repo) msgs.push('plan.json을 불러오지 못했습니다. 빈 계획으로 시작합니다.');
+  if (!storageOk) msgs.push('브라우저 저장소를 사용할 수 없어 변경이 새로고침 후 사라집니다.');
+  notice(msgs.join(' '));
+  render();
+})();
+})();
+</script>
+</body>
+</html>

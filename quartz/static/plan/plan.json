@@ -1,0 +1,11 @@
+{
+  "categories": [
+    { "id": "research", "name": "연구", "color": "#2f6fed" },
+    { "id": "invest",   "name": "투자", "color": "#dc3f36" },
+    { "id": "personal", "name": "개인", "color": "#2a9d5c" }
+  ],
+  "items": [
+    { "id": "s1", "date": "2026-09-14", "title": "이번 주 계획 세우기", "cat": "personal", "done": false },
+    { "id": "s2", "date": "2026-09-18", "title": "논문 초안 정리", "cat": "research", "done": false }
+  ]
+}
